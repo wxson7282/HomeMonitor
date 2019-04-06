@@ -1,0 +1,17 @@
+<PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <ListPreference
+        android:defaultValue="video/avc"
+        android:entries="@array/pref_mime_list_titles"
+        android:entryValues="@array/pref_mime_list_values"
+        android:key="mime_list"
+        android:title="@string/pref_title_mime_select" />
+
+    <ListPreference
+        android:defaultValue="640x480"
+        android:entries="@array/pref_size_list_titles"
+        android:entryValues="@array/pref_size_list_values"
+        android:key="size_list"
+        android:title="@string/pref_title_size_select" />
+
+</PreferenceScreen>

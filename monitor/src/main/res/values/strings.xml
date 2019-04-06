@@ -1,0 +1,5 @@
+<resources>
+    <string name="app_name">Monitor</string>
+    <string name="server_ip_address">114.252.243.246</string>
+    <string name="local_server_ip_address">192.168.31.63</string>
+</resources>
