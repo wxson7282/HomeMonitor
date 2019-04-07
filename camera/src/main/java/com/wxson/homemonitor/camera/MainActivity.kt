@@ -1,24 +1,29 @@
 package com.wxson.homemonitor.camera
 
+import android.Manifest
 import android.arch.lifecycle.Observer
 import android.arch.lifecycle.ViewModelProviders
 import android.content.res.Configuration
 import android.os.Bundle
 import android.support.design.widget.Snackbar
 import android.support.v7.app.AppCompatActivity
+import android.util.Log
 import android.util.Size
 import android.view.Menu
 import android.view.MenuItem
 import com.wxson.homemonitor.commlib.AutoFitTextureView
 import kotlinx.android.synthetic.main.activity_main.*
+import pub.devrel.easypermissions.EasyPermissions
 
 
 class MainActivity : AppCompatActivity() {
 
-    private val TAG = "MainActivity"
+    private val TAG = this.javaClass.simpleName
 
     private lateinit var viewModel: MainViewModel
     private lateinit var textureView: AutoFitTextureView
+    //requestCode
+    private val REQUEST_CAMERA_PERMISSION = 1
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -26,11 +31,11 @@ class MainActivity : AppCompatActivity() {
         setSupportActionBar(toolbar)
         viewModel = ViewModelProviders.of(this).get(MainViewModel::class.java)
         textureView = findViewById(R.id.textureView)
-//        viewModel.texture = textureView.surfaceTexture
+        textureView.surfaceTextureListener = viewModel.surfaceTextureListener
         viewModel.bindService()
 
         // registers observer for information from viewModel
-        val localMsgObserver: Observer<String> = Observer { localMsg -> showMsg(localMsg.toString()) }
+        val localMsgObserver: Observer<String> = Observer { localMsg -> localMsgHandler(localMsg.toString()) }
         viewModel.getLocalMsg().observe(this, localMsgObserver)
 
         val previewSizeObserver: Observer<Size> = Observer { previewSize -> setPreviewSize(previewSize!!) }
@@ -78,4 +83,34 @@ class MainActivity : AppCompatActivity() {
                 textureView.setAspectRatio(previewSize.height, previewSize.width)
             }
     }
+
+    private fun requestCameraPermission() {
+        Log.i(TAG, "requestCameraPermission")
+        val perms = Manifest.permission.CAMERA
+        if (EasyPermissions.hasPermissions(this, perms)) {
+            // Already have permission, do the thing
+            Log.i(TAG, "已获取相机权限")
+            //打开相机
+            viewModel.openCamera()
+        } else {
+            // Do not have permissions, request them now
+            Log.i(TAG, "申请相机权限")
+            EasyPermissions.requestPermissions(
+                this, getString(R.string.camera_rationale),
+                REQUEST_CAMERA_PERMISSION, perms
+            )
+        }
+    }
+
+    private fun localMsgHandler(localMsg: String){
+        when (localMsg){
+            getString(R.string.to_requestCameraPermission) -> {
+                requestCameraPermission()
+            }
+            else -> {
+                showMsg(localMsg)
+            }
+        }
+    }
+
 }

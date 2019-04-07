@@ -46,7 +46,7 @@ class CameraIntentService : IntentService("CameraIntentService") {
     private fun handleActionTcp() {
         var clientSocket: Socket? = null
         var serverSocket: ServerSocket? = null
-        var tcpSocketServiceStatus = ""
+        var tcpSocketServiceStatus: String
         try {
             serverSocket = ServerSocket(resources.getInteger(R.integer.ServerSocketPort))
 //            serverSocket.soTimeout = resources.getInteger(R.integer.ServerSocketTimeout)  //sets timeout for accept()
@@ -60,7 +60,7 @@ class CameraIntentService : IntentService("CameraIntentService") {
             }
         } catch (e: SocketTimeoutException) {
             Log.i(TAG, "SocketTimeoutException")    //ServerSocket.accept timeout
-            tcpSocketServiceStatus = "TIMEOUT"
+//            tcpSocketServiceStatus = "TIMEOUT"
         } catch (e: IOException) {
             e.printStackTrace()
             throw LocalException("I/O Exception")

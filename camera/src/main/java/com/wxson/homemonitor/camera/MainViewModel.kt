@@ -15,13 +15,12 @@ import android.hardware.camera2.*
 import android.media.ImageReader
 import android.media.MediaCodec
 import android.media.MediaFormat
-import android.os.Handler
 import android.os.IBinder
-import android.os.Message
 import android.preference.PreferenceManager
 import android.util.Log
 import android.util.Size
 import android.view.Surface
+import android.view.TextureView
 import com.wxson.homemonitor.camera.connect.CameraIntentService
 import com.wxson.homemonitor.camera.connect.IStringTransferListener
 import com.wxson.homemonitor.camera.connect.IsTcpSocketServiceOn
@@ -30,7 +29,6 @@ import com.wxson.homemonitor.commlib.*
 import java.io.File
 import java.io.FileOutputStream
 import java.io.IOException
-import java.lang.ref.WeakReference
 import java.net.InetAddress
 import java.text.SimpleDateFormat
 import java.util.*
@@ -39,7 +37,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val TAG = this.javaClass.simpleName
     private val app = application
     private var connectStatusListener: IConnectStatusListener? = null
-    lateinit var texture: SurfaceTexture
 
     //region for LiveData
     private var localMsgLiveData = MutableLiveData<String>()
@@ -59,23 +56,24 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         return isClientConnectedLiveData
     }
 
-    private var handler: Handler
-    class MyHandler(private var mainViewModel : WeakReference<MainViewModel>) : Handler(){
-        private val TAG = this.javaClass.simpleName
-        override fun handleMessage(msg: Message) {
-            Log.i(TAG, "handleMessage")
-            when (msg.what){
-                0x124 -> mainViewModel.get()?.localMsgLiveData!!.postValue(msg.obj.toString())
-                0x125 -> mainViewModel.get()?.previewSizeLiveData!!.postValue(msg.obj as Size)
-                0x126 -> mainViewModel.get()?.isClientConnectedLiveData!!.postValue(msg.obj as Boolean)
-            }
-        }
-    }
+//     //handler for server thread
+//    private var handler: Handler
+//    class MyHandler(private var mainViewModel : WeakReference<MainViewModel>) : Handler(){
+//        private val TAG = this.javaClass.simpleName
+//        override fun handleMessage(msg: Message) {
+//            Log.i(TAG, "handleMessage")
+//            when (msg.what){
+//                0x124 -> mainViewModel.get()?.localMsgLiveData!!.postValue(msg.obj.toString())
+//                0x125 -> mainViewModel.get()?.previewSizeLiveData!!.postValue(msg.obj as Size)
+//                0x126 -> mainViewModel.get()?.isClientConnectedLiveData!!.postValue(msg.obj as Boolean)
+//            }
+//        }
+//    }
     //endregion
 
     init {
         Log.i(TAG, "init")
-        handler = MyHandler(WeakReference(this))
+//        handler = MyHandler(WeakReference(this))
     }
 
     fun setConnectStatusListener(connectStatusListener: IConnectStatusListener) {
@@ -108,7 +106,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private lateinit var byteBufferTransfer: ByteBufferTransfer
     private lateinit var captureSession: CameraCaptureSession
     private lateinit var previewRequest: CaptureRequest
-
+    private var surfaceTexture: SurfaceTexture? = null
 
     private val stateCallback = object : CameraDevice.StateCallback() {
         //  摄像头被打开时激发该方法
@@ -196,7 +194,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     }
                 }, null
             )
-            // 获取最佳的预览尺寸
+            // 获取最佳的预览尺寸 通知MainActivity根据选中的预览尺寸来调整预览组件（TextureView的）的长宽比
             previewSizeLiveData.postValue(chooseOptimalSize(map.getOutputSizes(SurfaceTexture::class.java), width, height, largest))
         } catch (e: CameraAccessException) {
             e.printStackTrace()
@@ -209,17 +207,17 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private fun createCameraPreviewSession() {
         Log.i(TAG, "createCameraPreviewSession")
         try {
-//            val texture = mMainView.getTextureView().getSurfaceTexture()
-//            texture.setDefaultBufferSize(previewSizeLiveData.getWidth(), previewSizeLiveData.getHeight())
-            texture.setDefaultBufferSize(previewSizeLiveData.value!!.width, previewSizeLiveData.value!!.height)
+//            val surfaceTexture = mMainView.getTextureView().getSurfaceTexture()
+//            surfaceTexture.setDefaultBufferSize(previewSizeLiveData.getWidth(), previewSizeLiveData.getHeight())
+            surfaceTexture?.setDefaultBufferSize(previewSizeLiveData.value!!.width, previewSizeLiveData.value!!.height)
 
             // Set up Surface for the camera preview
-            val previewSurface = Surface(texture)
+            val previewSurface = Surface(surfaceTexture)
 
             // 创建作为预览的CaptureRequest.Builder
             previewRequestBuilder = cameraDevice.createCaptureRequest(CameraDevice.TEMPLATE_PREVIEW)
             // 将textureView的surface作为CaptureRequest.Builder的目标
-            previewRequestBuilder.addTarget(Surface(texture))
+            previewRequestBuilder.addTarget(Surface(surfaceTexture))
 
             //region added by wan
             //取得预设的编码格式
@@ -331,6 +329,30 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         } else {
             println("找不到合适的预览尺寸！！！")
             return choices[0]
+        }
+    }
+
+    val surfaceTextureListener = object : TextureView.SurfaceTextureListener{
+        override fun onSurfaceTextureSizeChanged(surface: SurfaceTexture?, width: Int, height: Int) {
+            Log.i(TAG, "onSurfaceTextureSizeChanged")
+        }
+
+        override fun onSurfaceTextureUpdated(surface: SurfaceTexture?) {
+            Log.i(TAG, "onSurfaceTextureUpdated")
+        }
+
+        override fun onSurfaceTextureDestroyed(surface: SurfaceTexture?): Boolean {
+            Log.i(TAG, "onSurfaceTextureDestroyed")
+            return true
+        }
+
+        override fun onSurfaceTextureAvailable(surface: SurfaceTexture?, width: Int, height: Int) {
+            Log.i(TAG, "onSurfaceTextureAvailable")
+            surfaceTexture = surface
+            cameraWidth = width
+            cameraHigh = height
+            // notify MainActivity to requestCameraPermission
+            localMsgLiveData.postValue(app.getString(R.string.to_requestCameraPermission))
         }
     }
 
