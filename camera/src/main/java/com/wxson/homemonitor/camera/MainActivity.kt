@@ -3,14 +3,17 @@ package com.wxson.homemonitor.camera
 import android.Manifest
 import android.arch.lifecycle.Observer
 import android.arch.lifecycle.ViewModelProviders
+import android.content.Intent
 import android.content.res.Configuration
 import android.os.Bundle
+import android.preference.PreferenceManager
 import android.support.design.widget.Snackbar
 import android.support.v7.app.AppCompatActivity
 import android.util.Log
 import android.util.Size
 import android.view.Menu
 import android.view.MenuItem
+import android.widget.ImageView
 import com.wxson.homemonitor.commlib.AutoFitTextureView
 import kotlinx.android.synthetic.main.activity_main.*
 import pub.devrel.easypermissions.EasyPermissions
@@ -22,6 +25,7 @@ class MainActivity : AppCompatActivity() {
 
     private lateinit var viewModel: MainViewModel
     private lateinit var textureView: AutoFitTextureView
+    private lateinit var imageConnectStatus: ImageView
     //requestCode
     private val REQUEST_CAMERA_PERMISSION = 1
 
@@ -29,17 +33,39 @@ class MainActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
         setSupportActionBar(toolbar)
+
+        imageConnectStatus = findViewById(R.id.imageConnected)
+
         viewModel = ViewModelProviders.of(this).get(MainViewModel::class.java)
         textureView = findViewById(R.id.textureView)
         textureView.surfaceTextureListener = viewModel.surfaceTextureListener
-        viewModel.bindService()
+        viewModel.rotation = this.windowManager.defaultDisplay.rotation
+        //首次运行时设置默认值
+        PreferenceManager.setDefaultValues(this, R.xml.pref_codec, false)
+        //取得预设的编码格式
+        val sharedPreferences = PreferenceManager.getDefaultSharedPreferences(this)
+        viewModel.mime = sharedPreferences.getString("mime_list", "")
+        //取得预设的分辨率
+        val s = sharedPreferences.getString("size_list", "")
+        if (s != null){
+            val prefSize = Size(
+                Integer.parseInt(s.split("x".toRegex()).dropLastWhile { it.isEmpty() }.toTypedArray()[0]),
+                Integer.parseInt(s.split("x".toRegex()).dropLastWhile { it.isEmpty() }.toTypedArray()[1]))
+            viewModel.size = prefSize
+        }
 
         // registers observer for information from viewModel
-        val localMsgObserver: Observer<String> = Observer { localMsg -> localMsgHandler(localMsg.toString()) }
+        val localMsgObserver: Observer<String> = Observer { localMsg -> showMsg(localMsg.toString()) }
         viewModel.getLocalMsg().observe(this, localMsgObserver)
 
         val previewSizeObserver: Observer<Size> = Observer { previewSize -> setPreviewSize(previewSize!!) }
         viewModel.getPreviewSize().observe(this,previewSizeObserver)
+
+        val connectStatusObserver: Observer<Boolean> = Observer { isConnected -> connectStatusHandler(isConnected!!) }
+        viewModel.getClientConnected().observe(this, connectStatusObserver)
+
+        val surfaceTextureStatusObserver: Observer<String> = Observer { msg -> surfaceTextureStatusHandler(msg.toString()) }
+        viewModel.getSurfaceTextureStatus().observe(this, surfaceTextureStatusObserver)
 
 //        fab.setOnClickListener { view ->
 //            if(IsTcpSocketServiceOn)
@@ -53,6 +79,7 @@ class MainActivity : AppCompatActivity() {
 //                        CameraIntentService.startActionTcp(this)
 //                    }).show()
 //        }
+//        viewModel.bindService()
     }
 
     override fun onCreateOptionsMenu(menu: Menu): Boolean {
@@ -65,10 +92,18 @@ class MainActivity : AppCompatActivity() {
         // Handle action bar item clicks here. The action bar will
         // automatically handle clicks on the Home/Up button, so long
         // as you specify a parent activity in AndroidManifest.xml.
-        return when (item.itemId) {
-            R.id.action_settings -> true
-            else -> super.onOptionsItemSelected(item)
+        val returnValue: Boolean
+        returnValue = when (item.itemId){
+            R.id.action_settings ->{
+                val intent = Intent(this@MainActivity, SettingsActivity::class.java)
+                startActivity(intent)
+                true
+            }
+            else -> {
+                super.onOptionsItemSelected(item)
+            }
         }
+        return returnValue
     }
 
     private fun showMsg(msg: String){
@@ -102,14 +137,19 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun localMsgHandler(localMsg: String){
-        when (localMsg){
-            getString(R.string.to_requestCameraPermission) -> {
-                requestCameraPermission()
-            }
-            else -> {
-                showMsg(localMsg)
-            }
+    private fun surfaceTextureStatusHandler(msg: String){
+        when (msg){
+            "onSurfaceTextureAvailable" -> requestCameraPermission()
+            else -> {}
+        }
+    }
+
+    private fun connectStatusHandler(isConnected: Boolean){
+        if (isConnected){
+            imageConnectStatus.setImageDrawable(getDrawable(R.drawable.ic_connected))
+        }
+        else{
+            imageConnectStatus.setImageDrawable(getDrawable(R.drawable.ic_disconnected))
         }
     }
 

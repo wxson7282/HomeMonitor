@@ -1,10 +1,10 @@
 package com.wxson.homemonitor.camera.connect
 
+import android.annotation.SuppressLint
 import android.app.IntentService
 import android.content.Context
 import android.content.Intent
-import android.os.Binder
-import android.os.IBinder
+import android.os.*
 import android.util.Log
 import com.wxson.homemonitor.camera.R
 import com.wxson.homemonitor.commlib.LocalException
@@ -13,7 +13,6 @@ import java.io.ObjectInputStream
 import java.io.ObjectOutputStream
 import java.net.ServerSocket
 import java.net.Socket
-import java.net.SocketTimeoutException
 
 private const val ACTION_TCP = "com.wxson.homemonitor.camera.connect.action.TCP"
 var IsTcpSocketServiceOn = false  //switch for TcpSocketService ON/OFF
@@ -23,8 +22,8 @@ private lateinit var StringTransferListener: IStringTransferListener
  * a service on a separate handler thread.
  */
 class CameraIntentService : IntentService("CameraIntentService") {
-
     private val TAG = "CameraIntentService"
+    lateinit var outputThread: ServerOutputThread
 
     override fun onHandleIntent(intent: Intent?) {
         when (intent?.action) {
@@ -36,12 +35,6 @@ class CameraIntentService : IntentService("CameraIntentService") {
 
     /**
      * Handle action TCP in the provided background thread with the provided
-     * parameters.
-     * There are tow methods to stop handleActionTcp
-     *  1. SocketTimeoutException
-     *      no clientSocket accepted from client until timeout
-     *  2. IsTcpSocketServiceOn controlled by stopTcpSocketService()
-     *      implement by outside
      */
     private fun handleActionTcp() {
         var clientSocket: Socket? = null
@@ -49,18 +42,17 @@ class CameraIntentService : IntentService("CameraIntentService") {
         var tcpSocketServiceStatus: String
         try {
             serverSocket = ServerSocket(resources.getInteger(R.integer.ServerSocketPort))
-//            serverSocket.soTimeout = resources.getInteger(R.integer.ServerSocketTimeout)  //sets timeout for accept()
             Log.i(TAG, "handleActionTcp: create ServerSocket")
             while (IsTcpSocketServiceOn){
                 Log.i(TAG, "handleActionTcp: while IsTcpSocketServiceOn")
                 StringTransferListener.onMsgTransfer("TcpSocketServiceStatus", "ON")
                 clientSocket = serverSocket.accept()   //blocks until a connection is made
                 Log.i(TAG, "client IP address: " + clientSocket.inetAddress.hostAddress)
-                Thread(ServerThread(clientSocket)).start()
+                StringTransferListener.onMsgTransfer("TcpSocketClientStatus", "ON")
+                Thread(ServerInputThread(clientSocket)).start()     // Input thread
+                outputThread = ServerOutputThread(clientSocket)
+                Thread(outputThread).start()    // Output thread
             }
-        } catch (e: SocketTimeoutException) {
-            Log.i(TAG, "SocketTimeoutException")    //ServerSocket.accept timeout
-//            tcpSocketServiceStatus = "TIMEOUT"
         } catch (e: IOException) {
             e.printStackTrace()
             throw LocalException("I/O Exception")
@@ -113,12 +105,9 @@ class CameraIntentService : IntentService("CameraIntentService") {
                     localSocket = Socket("127.0.0.1", 30000)
                     objectOutputStream =  ObjectOutputStream(localSocket?.outputStream)
                     objectOutputStream?.writeObject("StopTcpSocketService".toByteArray())
-//                    objectOutputStream?.close()
-//                    localSocket?.close()
                 }
                 catch (e:IOException){
                     Log.i(TAG, "stopTcpSocketService: IOException")
-//                    e.printStackTrace()
                 }
             }
         }.start()
@@ -130,7 +119,7 @@ class CameraIntentService : IntentService("CameraIntentService") {
     }
 }
 
-class ServerThread(private var clientSocket: Socket) : Runnable {
+class ServerInputThread(private var clientSocket: Socket) : Runnable {
 
     private val TAG = this.javaClass.simpleName
 
@@ -165,7 +154,51 @@ class ServerThread(private var clientSocket: Socket) : Runnable {
         // 如果捕捉到异常，表明该Socket对应的客户端已经关闭
         catch (e: IOException){
             Log.i(TAG, "readObjectFromClient: socket is closed")
+            StringTransferListener.onMsgTransfer("TcpSocketClientStatus", "OFF")
         }
         return null
     }
 }
+
+/**
+ * The thread for sending image data from MediaCodec.Buffer
+ * Output timing is onOutputBufferAvailable
+ */
+class ServerOutputThread(clientSocket: Socket) : Runnable{
+    private val TAG = this.javaClass.simpleName
+    private val objectOutputStream: ObjectOutputStream = ObjectOutputStream(clientSocket.getOutputStream())
+    // 定义接收外部线程的消息的Handler对象
+    var handler = Handler(Handler.Callback { false })
+
+    override fun run() {
+        while (true) {
+            try {
+                Looper.prepare()
+                handler = @SuppressLint("HandlerLeak") object : Handler(){
+                    override fun handleMessage(msg: Message) {
+                        // ByteBuffer data
+                        if (msg.what == 0x333){
+                            writeObjectToClient(msg.obj)
+                        }
+                    }
+                }
+                Looper.loop()
+            }
+            catch (e: InterruptedException) {
+                Log.e(TAG, "ServerOutputThread InterruptedException")
+            }
+        }
+    }
+
+    private fun writeObjectToClient(obj: Any){
+        try {
+            objectOutputStream.writeObject(obj)
+        }
+        catch (e: IOException){
+            Log.i(TAG, "writeObjectToClient: socket is closed")
+            StringTransferListener.onMsgTransfer("TcpSocketClientStatus", "OFF")
+        }
+    }
+
+}
+

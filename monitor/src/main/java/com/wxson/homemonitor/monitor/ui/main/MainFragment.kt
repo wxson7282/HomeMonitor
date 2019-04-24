@@ -9,6 +9,7 @@ import android.util.Log
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import android.widget.ImageView
 import com.wxson.homemonitor.monitor.R
 import kotlinx.android.synthetic.main.main_fragment.*
 
@@ -21,45 +22,69 @@ class MainFragment : Fragment() {
     }
 
     private lateinit var viewModel: MainViewModel
+    private lateinit var imageConnectStatus: ImageView
+    private var isConnected = false
 
     override fun onCreateView(
         inflater: LayoutInflater, container: ViewGroup?,
         savedInstanceState: Bundle?
     ): View {
-        return inflater.inflate(R.layout.main_fragment, container, false)
+        val rootView = inflater.inflate(R.layout.main_fragment, container, false)
+//        imageConnectStatus = activity!!.findViewById(R.id.imageConnected)
+        return rootView
     }
 
     override fun onActivityCreated(savedInstanceState: Bundle?) {
         super.onActivityCreated(savedInstanceState)
         Log.i(TAG, "onActivityCreated")
+        imageConnectStatus = activity!!.findViewById(R.id.imageConnected)
         viewModel = ViewModelProviders.of(this).get(MainViewModel::class.java)
 
         //定义浮动按钮
         fab.setOnClickListener{
                 view ->
-            if(viewModel.transferStatus == MainViewModel.TransferStatus.OFF)
-                Snackbar.make(view, "开始传送", Snackbar.LENGTH_LONG)
-                    .setAction("确定", View.OnClickListener{
-                        viewModel.sendMsgToServer("Start Video Transfer")
-                        viewModel.transferStatus = MainViewModel.TransferStatus.ON
-                    }).show()
-            else
-                Snackbar.make(view, "停止传送", Snackbar.LENGTH_LONG)
-                    .setAction("确定", View.OnClickListener{
-                        viewModel.sendMsgToServer("Stop Video Transfer")
-                        viewModel.transferStatus = MainViewModel.TransferStatus.OFF
-                    }).show()
+            if (isConnected){
+                if (viewModel.transferStatus == MainViewModel.TransferStatus.OFF)
+                    Snackbar.make(view, "开始传送", Snackbar.LENGTH_LONG)
+                        .setAction("确定", View.OnClickListener{
+                            viewModel.sendMsgToServer("Start Video Transfer")
+                            viewModel.transferStatus = MainViewModel.TransferStatus.ON
+                        }).show()
+                else
+                    Snackbar.make(view, "停止传送", Snackbar.LENGTH_LONG)
+                        .setAction("确定", View.OnClickListener{
+                            viewModel.sendMsgToServer("Stop Video Transfer")
+                            viewModel.transferStatus = MainViewModel.TransferStatus.OFF
+                        }).show()
+            }
+            else {
+                showMsg("服务器未连接")
+            }
         }
 
-        val serverMsgObserver: Observer<Any> = Observer { serverMsg -> msgShow.text = serverMsg!!.javaClass.simpleName }
+        val serverMsgObserver: Observer<Any> = Observer { serverMsg -> showMsg(serverMsg!!.javaClass.simpleName) }
         viewModel.getServerMsg().observe(this, serverMsgObserver)
 
-        val localMsgObserver: Observer<String> = Observer { localMsg -> showMsg(localMsg.toString()) }
+        val localMsgObserver: Observer<String> = Observer { localMsg -> localMsgHandler(localMsg.toString()) }
         viewModel.getLocalMsg().observe(this, localMsgObserver)
 
     }
 
     private fun showMsg(msg: String){
         Snackbar.make(fab, msg, Snackbar.LENGTH_LONG).show()
+    }
+
+    private fun localMsgHandler(localMsg: String){
+        when (localMsg){
+            "Connected" -> {
+                imageConnectStatus.setImageDrawable(resources.getDrawable(R.drawable.ic_connected, null))
+                isConnected = true
+            }
+            "Disconnected" -> {
+                imageConnectStatus.setImageDrawable(resources.getDrawable(R.drawable.ic_disconnected, null))
+                isConnected = false
+            }
+            else -> showMsg(localMsg)
+        }
     }
 }

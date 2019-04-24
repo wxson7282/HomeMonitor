@@ -16,14 +16,16 @@ import android.media.ImageReader
 import android.media.MediaCodec
 import android.media.MediaFormat
 import android.os.IBinder
-import android.preference.PreferenceManager
+import android.os.Message
 import android.util.Log
 import android.util.Size
+import android.util.SparseIntArray
 import android.view.Surface
 import android.view.TextureView
 import com.wxson.homemonitor.camera.connect.CameraIntentService
 import com.wxson.homemonitor.camera.connect.IStringTransferListener
 import com.wxson.homemonitor.camera.connect.IsTcpSocketServiceOn
+import com.wxson.homemonitor.camera.mediacodec.IByteBufferListener
 import com.wxson.homemonitor.camera.mediacodec.MediaCodecCallback
 import com.wxson.homemonitor.commlib.*
 import java.io.File
@@ -36,7 +38,24 @@ import java.util.*
 class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val TAG = this.javaClass.simpleName
     private val app = application
-    private var connectStatusListener: IConnectStatusListener? = null
+    private lateinit var connectStatusListener: IConnectStatusListener
+    private val byteBufferTransfer: ByteBufferTransfer
+    /**
+     *  on service connected, start CameraIntentService.
+     */
+    private val serviceConnection: ServiceConnection = object : ServiceConnection {
+        override fun onServiceConnected(name: ComponentName?, service: IBinder?) {
+            Log.i(TAG, "onServiceConnected")
+            val binder = service as CameraIntentService.MyBinder
+            cameraIntentService = binder.cameraIntentService
+            cameraIntentService?.setStringTransferListener(stringTransferListener)
+            CameraIntentService.startActionTcp(app)
+        }
+        override fun onServiceDisconnected(name: ComponentName?) {
+            Log.i(TAG, "onServiceDisconnected")
+        }
+    }
+
 
     //region for LiveData
     private var localMsgLiveData = MutableLiveData<String>()
@@ -56,6 +75,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         return isClientConnectedLiveData
     }
 
+    //surfaceTexture
+    private var surfaceTextureStatusLiveData = MutableLiveData<String>()
+    fun getSurfaceTextureStatus(): LiveData<String>{
+        return surfaceTextureStatusLiveData
+    }
+
 //     //handler for server thread
 //    private var handler: Handler
 //    class MyHandler(private var mainViewModel : WeakReference<MainViewModel>) : Handler(){
@@ -73,7 +98,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     init {
         Log.i(TAG, "init")
-//        handler = MyHandler(WeakReference(this))
+        byteBufferTransfer = ByteBufferTransfer()
+        bindService()
     }
 
     fun setConnectStatusListener(connectStatusListener: IConnectStatusListener) {
@@ -95,24 +121,26 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     //region for camera
     private lateinit var previewRequestBuilder: CaptureRequest.Builder
-    private lateinit var cameraDevice: CameraDevice
-    private lateinit var mMediaCodec: MediaCodec            //编解码器
+//    private lateinit var cameraDevice: CameraDevice
+    lateinit var mediaCodec: MediaCodec            //编解码器
     private var cameraWidth: Int = 0
     private var cameraHigh: Int = 0
     // 摄像头ID（通常0代表后置摄像头，1代表前置摄像头）
     private val cameraId = "0"
-    private var cameraDevice1: CameraDevice? = null
+    private var cameraDevice: CameraDevice? = null
     private lateinit var imageReader: ImageReader
-    private lateinit var byteBufferTransfer: ByteBufferTransfer
     private lateinit var captureSession: CameraCaptureSession
     private lateinit var previewRequest: CaptureRequest
     private var surfaceTexture: SurfaceTexture? = null
+    var rotation = Surface.ROTATION_0   // 显示设备方向
+    var mime: String? = ""                    //视频编码格式
+    var size  = Size(0, 0)    //视频编码分辨率
 
     private val stateCallback = object : CameraDevice.StateCallback() {
         //  摄像头被打开时激发该方法
-        override fun onOpened(cameraDevice: CameraDevice) {
+        override fun onOpened(device: CameraDevice) {
             Log.i(TAG, "onOpened")
-            cameraDevice1 = cameraDevice
+            cameraDevice = device
 //            //WifiP2pConnectStatus监听器取得连接状态
 //            setWifiP2pConnectStatus()
             // 开始预览
@@ -120,14 +148,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
 
         // 摄像头断开连接时激发该方法
-        override fun onDisconnected(cameraDevice: CameraDevice) {
+        override fun onDisconnected(device: CameraDevice) {
             Log.i(TAG, "onDisconnected")
             closeCamera()
         }
 
-        // 打开摄像头出现错误时激发该方法
-        override fun onError(cameraDevice: CameraDevice, error: Int) {
-            Log.i(TAG, "onError")
+        // 摄像头出现错误时激发该方法
+        override fun onError(device: CameraDevice, error: Int) {
+            Log.i(TAG, "onError $error")
             closeCamera()
             System.exit(1)
         }
@@ -147,6 +175,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         } catch (e: NullPointerException) {
             e.printStackTrace()
         }
+    }
+
+    fun closeCamera() {
+        Log.i(TAG, "closeCamera")
+//        mediaCodec.stop()
+//        mediaCodec.release()
+        cameraDevice?.close()
+        cameraDevice = null
     }
 
     private fun setUpCameraOutputs(width: Int, height: Int) {
@@ -199,7 +235,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         } catch (e: CameraAccessException) {
             e.printStackTrace()
         } catch (e: NullPointerException) {
-            println("出现错误。")
+            Log.e(TAG,"setUpCameraOutputs: NullPointerException" )
         }
 
     }
@@ -207,6 +243,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private fun createCameraPreviewSession() {
         Log.i(TAG, "createCameraPreviewSession")
         try {
+            if (cameraDevice == null){
+                return
+            }
 //            val surfaceTexture = mMainView.getTextureView().getSurfaceTexture()
 //            surfaceTexture.setDefaultBufferSize(previewSizeLiveData.getWidth(), previewSizeLiveData.getHeight())
             surfaceTexture?.setDefaultBufferSize(previewSizeLiveData.value!!.width, previewSizeLiveData.value!!.height)
@@ -215,25 +254,31 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             val previewSurface = Surface(surfaceTexture)
 
             // 创建作为预览的CaptureRequest.Builder
-            previewRequestBuilder = cameraDevice.createCaptureRequest(CameraDevice.TEMPLATE_PREVIEW)
+            previewRequestBuilder = cameraDevice!!.createCaptureRequest(CameraDevice.TEMPLATE_PREVIEW)
             // 将textureView的surface作为CaptureRequest.Builder的目标
             previewRequestBuilder.addTarget(Surface(surfaceTexture))
 
             //region added by wan
-            //取得预设的编码格式
-            val sharedPreferences = PreferenceManager.getDefaultSharedPreferences(app.applicationContext)
-            val mime = sharedPreferences.getString("mime_list", "")
             // 根据视频编码类型创建编码器
-            mMediaCodec = MediaCodec.createEncoderByType(mime!!)
+            mediaCodec = MediaCodec.createEncoderByType(mime!!)
             // Set up Callback for the Encoder
-            val port = app.resources.getInteger(R.integer.ServerSocketPort)
-            val mediaCodecCallback = MediaCodecCallback(byteBufferTransfer, port, this)
-            mMediaCodec.setCallback(mediaCodecCallback.getCallback())
+            val mediaCodecCallback = MediaCodecCallback(byteBufferTransfer, this)
+            mediaCodec.setCallback(mediaCodecCallback.getCallback())
+            //设置监听器
+            // to inform MainViewModel onOutputBufferAvailable in MediaCodecCallback
+            mediaCodecCallback.setByteBufferListener( object : IByteBufferListener {
+                override fun onByteBufferReady(byteBufferTransfer: ByteBufferTransfer) {
+                    // inform ServerOutputThread of ByteBufferReady by handler
+                    val msg = Message()
+                    msg.what = 0x333
+                    msg.obj = byteBufferTransfer
+                    cameraIntentService!!.outputThread.handler.sendMessage(msg)
+                }
+            })
 
             //取得预设的分辨率
-            val size = sharedPreferences.getString("size_list", "")
-            val width = Integer.parseInt(size!!.split("x".toRegex()).dropLastWhile { it.isEmpty() }.toTypedArray()[0])
-            val height = Integer.parseInt(size.split("x".toRegex()).dropLastWhile { it.isEmpty() }.toTypedArray()[1])
+            val width = size.width
+            val height = size.height
 
             //set up output mediaFormat
             val codecFormat: IFormatModel
@@ -243,17 +288,17 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 codecFormat = H264Format(width, height)
             }
 
-            // configure mMediaCodec
-            mMediaCodec.configure(codecFormat.getEncodeFormat(), null, null, MediaCodec.CONFIGURE_FLAG_ENCODE)
+            // configure mediaCodec
+            mediaCodec.configure(codecFormat.getEncodeFormat(), null, null, MediaCodec.CONFIGURE_FLAG_ENCODE)
 
             // Set up Surface for the Encoder
             val encoderInputSurface = MediaCodec.createPersistentInputSurface()
-            mMediaCodec.setInputSurface(encoderInputSurface)
-            mMediaCodec.start()
+            mediaCodec.setInputSurface(encoderInputSurface)
+            mediaCodec.start()
             previewRequestBuilder.addTarget(encoderInputSurface)
 
             // 创建CameraCaptureSession，该对象负责管理处理预览请求和拍照请求，以及传输请求
-            cameraDevice.createCaptureSession(
+            cameraDevice!!.createCaptureSession(
                 Arrays.asList(previewSurface, encoderInputSurface, imageReader.getSurface()), object :
                     CameraCaptureSession.StateCallback() {
                     override fun onConfigured(cameraCaptureSession: CameraCaptureSession) {
@@ -297,10 +342,73 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun closeCamera() {
-        Log.i(TAG, "closeCamera")
-        cameraDevice1?.close()
-        cameraDevice1 = null
+    private fun captureStillPicture() {
+        Log.i(TAG, "captureStillPicture")
+        try {
+            if (cameraDevice == null) {
+                return
+            }
+            // 创建作为拍照的CaptureRequest.Builder
+            val captureRequestBuilder = cameraDevice!!.createCaptureRequest(CameraDevice.TEMPLATE_STILL_CAPTURE)
+            // 将imageReader的surface作为CaptureRequest.Builder的目标
+            captureRequestBuilder.addTarget(imageReader.surface)
+            // 设置自动对焦模式
+            captureRequestBuilder.set(
+                CaptureRequest.CONTROL_AF_MODE,
+                CaptureRequest.CONTROL_AF_MODE_CONTINUOUS_PICTURE
+            )
+            // 设置自动曝光模式
+            captureRequestBuilder.set(
+                CaptureRequest.CONTROL_AE_MODE,
+                CaptureRequest.CONTROL_AE_MODE_ON_AUTO_FLASH
+            )
+            // 根据设备方向计算设置照片的方向
+            setORIENTATIONS()
+            captureRequestBuilder.set(CaptureRequest.JPEG_ORIENTATION, ORIENTATIONS.get(rotation))
+            // 停止连续取景
+            captureSession.stopRepeating()
+            // 捕获静态图像
+            captureSession.capture(captureRequestBuilder.build(), object : CameraCaptureSession.CaptureCallback()
+            {
+                // 拍照完成时激发该方法
+                override fun onCaptureCompleted(
+                    session: CameraCaptureSession,
+                    request: CaptureRequest,
+                    result: TotalCaptureResult
+                ) {
+                    try {
+                        // 重设自动对焦模式
+                        previewRequestBuilder.set(
+                            CaptureRequest.CONTROL_AF_TRIGGER,
+                            CameraMetadata.CONTROL_AF_TRIGGER_CANCEL
+                        )
+                        // 设置自动曝光模式
+                        previewRequestBuilder.set(
+                            CaptureRequest.CONTROL_AE_MODE,
+                            CaptureRequest.CONTROL_AE_MODE_ON_AUTO_FLASH
+                        )
+                        // 打开连续取景模式
+                        captureSession.setRepeatingRequest(previewRequest, null, null)
+                    }
+                    catch (e: CameraAccessException) {
+                        e.printStackTrace()
+                    }
+                }
+            }, null)
+        }
+        catch (e: CameraAccessException) {
+            e.printStackTrace();
+        }
+    }
+
+    //方向数组
+    private val ORIENTATIONS = SparseIntArray()
+    private fun setORIENTATIONS(){
+        ORIENTATIONS.clear()
+        ORIENTATIONS.append(Surface.ROTATION_0, 90)
+        ORIENTATIONS.append(Surface.ROTATION_90, 0)
+        ORIENTATIONS.append(Surface.ROTATION_180, 270)
+        ORIENTATIONS.append(Surface.ROTATION_270, 180)
     }
 
     // 为Size定义一个比较器Comparator
@@ -343,6 +451,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
         override fun onSurfaceTextureDestroyed(surface: SurfaceTexture?): Boolean {
             Log.i(TAG, "onSurfaceTextureDestroyed")
+            closeCamera()
             return true
         }
 
@@ -352,7 +461,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             cameraWidth = width
             cameraHigh = height
             // notify MainActivity to requestCameraPermission
-            localMsgLiveData.postValue(app.getString(R.string.to_requestCameraPermission))
+            surfaceTextureStatusLiveData.postValue("onSurfaceTextureAvailable")
         }
     }
 
@@ -366,6 +475,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         override fun onStringArrived(arrivedString: String, clientInetAddress: InetAddress) {
             Log.i(TAG, "onStringArrived")
             localMsgLiveData.postValue("arrivedString:$arrivedString clientInetAddress:$clientInetAddress")
+            // Take a photo on command of client
+            if (arrivedString == "capture"){
+                captureStillPicture()
+            }
         }
 
         override fun onMsgTransfer(msgType: String, msg: String) {
@@ -379,8 +492,17 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                             app.unbindService(serviceConnection)
                             System.exit(0)
                         }
-                        else -> {
-                            localMsgLiveData.postValue("TcpSocketService invalid status")
+                    }
+                }
+                "TcpSocketClientStatus" -> {
+                    when (msg){
+                        "ON" -> {
+                            isClientConnectedLiveData.postValue(true)
+                            connectStatusListener.onConnectStatusChanged(true)
+                        }
+                        "OFF" -> {
+                            isClientConnectedLiveData.postValue(false)
+                            connectStatusListener.onConnectStatusChanged(false)
                         }
                     }
                 }
@@ -391,25 +513,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    /**
-     *  on service connected, start CameraIntentService.
-     */
-    private val serviceConnection: ServiceConnection = object : ServiceConnection {
-        override fun onServiceConnected(name: ComponentName?, service: IBinder?) {
-            Log.i(TAG, "onServiceConnected")
-            val binder = service as CameraIntentService.MyBinder
-            cameraIntentService = binder.cameraIntentService
-            cameraIntentService?.setStringTransferListener(stringTransferListener)
-            CameraIntentService.startActionTcp(app)
-        }
-        override fun onServiceDisconnected(name: ComponentName?) {
-            Log.i(TAG, "onServiceDisconnected")
-        }
-    }
-
-    fun bindService() {
+    private fun bindService() {
         val intent = Intent(app, CameraIntentService::class.java)
         app.bindService(intent, serviceConnection, Context.BIND_AUTO_CREATE)
     }
     //endregion
+
+
+
 }

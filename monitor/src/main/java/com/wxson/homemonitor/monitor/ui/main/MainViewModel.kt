@@ -16,6 +16,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val TAG = this.javaClass.simpleName
 
     private val app = getApplication<Application>()
+    private val myUncheckedExceptionHandler = MyUncheckedExceptionHandler()
 
     enum class TransferStatus{OFF, ON}
     var transferStatus = TransferStatus.OFF
@@ -30,8 +31,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         return localMsg
     }
 
+    private var unchekedException = MutableLiveData<String>()
+    fun getUnchededException(): LiveData<String>{
+        return unchekedException
+    }
+
     private var handler: Handler
     private var clientThread: ClientThread
+
     class MyHandler(private var mainViewModel : WeakReference<MainViewModel>) : Handler(){
         private val TAG = this.javaClass.simpleName
         override fun handleMessage(msg: Message) {
@@ -44,8 +51,19 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    private val uncaughtExceptionListener = object : MyUncheckedExceptionHandler.IUncaughtExceptionListener{
+        override fun onUnUncaughtException(exceptionName: String) {
+            //如果从子线程收到EOFException，表明服务器已经关闭
+            if (exceptionName == "EOFException"){
+                localMsg.postValue("Disconnected")
+            }
+        }
+    }
+
     init{
         Log.i(TAG, "init")
+        myUncheckedExceptionHandler.setUncaughtExceptionListener(uncaughtExceptionListener)
+        Thread.setDefaultUncaughtExceptionHandler(myUncheckedExceptionHandler)
         handler = MyHandler(WeakReference(this))
         clientThread = ClientThread(handler, app)
         Thread(clientThread).start()
@@ -59,4 +77,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         clientThread.revHandler.sendMessage(msg)
     }
 
+    override fun onCleared() {
+        Thread(clientThread).interrupt()
+        clientThread.socket?.close()
+        clientThread.socket = null
+        super.onCleared()
+    }
 }

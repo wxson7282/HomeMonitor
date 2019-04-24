@@ -2,11 +2,15 @@ package com.wxson.homemonitor.monitor.connect
 
 import android.annotation.SuppressLint
 import android.content.Context
+import android.media.MediaCodec
 import android.os.Handler
 import android.os.Looper
 import android.os.Message
 import android.util.Log
+import com.wxson.homemonitor.commlib.ByteBufferTransfer
 import com.wxson.homemonitor.monitor.R
+import com.wxson.homemonitor.monitor.mediacodec.IFirstByteBufferListener
+import com.wxson.homemonitor.monitor.mediacodec.IInputDataReadyListener
 import java.io.IOException
 import java.io.ObjectInputStream
 import java.io.ObjectOutputStream
@@ -14,25 +18,35 @@ import java.io.OutputStream
 import java.net.ConnectException
 import java.net.NoRouteToHostException
 import java.net.Socket
-import java.net.SocketTimeoutException
+
 
 class ClientThread(private val handler: Handler, context: Context) : Runnable {
 
     private val TAG = this.javaClass.simpleName
     private val res = context.resources
-    private var socket: Socket? = null
+    var socket: Socket? = null
     // 定义接收UI线程的消息的Handler对象
     var revHandler = Handler(Handler.Callback { false })
 
     // 该线程所处理的Socket所对应的输出流
     private var outputStream: OutputStream? = null
     private var objectOutputStream: ObjectOutputStream? = null
+    private var firstByteBufferFlag: Int = 1
+
+
+    companion object{
+        @JvmStatic
+        lateinit var firstByteBufferListener: IFirstByteBufferListener
+        @JvmStatic
+        lateinit var inputDataReadyListener: IInputDataReadyListener
+    }
 
     override fun run() {
         Log.i(TAG, "run")
+        sendLocalMsg("Disconnected")
         try{
-//            socket = Socket("192.168.31.63", 30000) //MiNote address
             socket = Socket(res.getString(R.string.server_ip_address), res.getInteger(R.integer.ServerSocketPort))
+            sendLocalMsg("Connected")
             outputStream = socket?.outputStream
             objectOutputStream = if (outputStream != null) ObjectOutputStream(outputStream) else null
             // 启动一条子线程来读取服务器响应的数据
@@ -40,14 +54,47 @@ class ClientThread(private val handler: Handler, context: Context) : Runnable {
                 override fun run() {
                     val inputStream = socket?.getInputStream()
                     val objectInputStream = if (inputStream != null) ObjectInputStream(inputStream) else null
-                    var inputObject = objectInputStream?.readObject()
+                    var inputObject: Any? = objectInputStream?.readObject()
                     // 不断读取Socket输入流中的内容
                     while (inputObject != null){
-                        // 每当读到来自服务器的数据之后，发送消息通知  程序界面显示该数据
-                        val msg = Message()
-                        msg.what = 0x123
-                        msg.obj = inputObject
-                        handler.sendMessage(msg)
+                        when (inputObject.javaClass.simpleName){
+                            // ByteBufferTransfer is received
+                            "ByteBufferTransfer" -> {
+                                Log.i(TAG, "接收到ByteBufferTransfer类")
+                                val byteBufferTransfer = inputObject as ByteBufferTransfer
+                                // 接收到首个byteBufferTransfer既第一帧视频
+                                if (firstByteBufferFlag == 1){
+                                    firstByteBufferFlag++
+                                    //触发FirstByteBufferListener，通知MonitorTextureView准备解码器
+                                    firstByteBufferListener.onFirstByteBufferArrived(byteBufferTransfer.csd)
+                                }
+                                //如果FirstByteBuffer已到 decode已经启动
+                                if (firstByteBufferFlag > 1){
+                                    //把ByteBuffer传给Decode
+                                    Log.i(TAG, "把ByteBuffer传给MediaCodec")
+                                    val bufferInfo = MediaCodec.BufferInfo()
+                                    bufferInfo.flags = byteBufferTransfer.bufferInfoFlags
+                                    bufferInfo.offset = byteBufferTransfer.bufferInfoOffset
+                                    bufferInfo.presentationTimeUs = byteBufferTransfer.bufferInfoPresentationTimeUs
+                                    bufferInfo.size = byteBufferTransfer.bufferInfoSize
+                                    inputDataReadyListener.onInputDataReady(byteBufferTransfer.byteArray, bufferInfo)
+                                }
+                            }
+                            // Byte array is received
+                            "byte[]" -> {
+                                // 每当读到来自服务器的文字数据之后，发送消息通知  程序界面显示该数据
+                                Log.i(TAG, "接收到byte[]类")
+                                val msg = Message()
+                                msg.what = 0x123
+                                msg.obj = inputObject
+                                handler.sendMessage(msg)
+                            }
+                            // other is received
+                            else -> {
+                                Log.i(TAG, "接收到其它类 ${inputObject.javaClass.simpleName}")
+                            }
+                        }
+
                         // read next from socket
                         inputObject = objectInputStream?.readObject()
                     }
@@ -70,23 +117,14 @@ class ClientThread(private val handler: Handler, context: Context) : Runnable {
         }
         catch(e: NoRouteToHostException){
             Log.e(TAG, "服务器连接失败！！")
-            //把失败信息向上传递
-            val msg = Message()
-            msg.what = 0x124
-            msg.obj = "服务器连接失败！！"
-            handler.sendMessage(msg)
-        }
-        catch (e1: SocketTimeoutException){
-            e1.printStackTrace()
-            Log.e(TAG, "网络连接超时！！")
+            sendLocalMsg("服务器连接失败！！")
         }
         catch (e: ConnectException){
             Log.e(TAG, "服务器未启动！！")
-            //把失败信息向上传递
-            val msg = Message()
-            msg.what = 0x124
-            msg.obj = "服务器未启动！！"
-            handler.sendMessage(msg)
+            sendLocalMsg("服务器未启动！！")
+        }
+        catch (re: RuntimeException){
+            Log.e(TAG, "RuntimeException")
         }
         catch (e: IOException){
             e.printStackTrace()
@@ -96,6 +134,18 @@ class ClientThread(private val handler: Handler, context: Context) : Runnable {
             e.printStackTrace()
             System.exit(1)
         }
-
+        finally {
+            socket?.close()
+            socket = null
+            sendLocalMsg("Disconnected")
+        }
     }
+
+    private fun sendLocalMsg(localMsg: String){
+        val msg = Message()
+        msg.what = 0x124
+        msg.obj = localMsg
+        handler.sendMessage(msg)
+    }
+
 }
