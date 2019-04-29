@@ -1,10 +1,8 @@
 package com.wxson.homemonitor.monitor.mediacodec;
 
 import android.content.Context;
-import android.content.SharedPreferences;
 import android.media.MediaCodec;
 import android.media.MediaFormat;
-import android.preference.PreferenceManager;
 import android.util.Log;
 import android.view.Surface;
 import com.wxson.homemonitor.commlib.H264Format;
@@ -20,12 +18,7 @@ import java.io.IOException;
 public class MediaCodecAction {
     private static final String TAG = "MediaCodecAction";
 
-    public static MediaCodec PrepareDecoder(Surface surface, byte[] csd, Context context){
-        //取得预设的编码格式
-        SharedPreferences sharedPreferences =PreferenceManager.getDefaultSharedPreferences(context);
-        String mime = sharedPreferences.getString("mime_list", "");
-        //取得预设的分辨率
-        String size = sharedPreferences.getString("size_list", "");
+    public static MediaCodec PrepareDecoder(Surface surface, byte[] csd, String mime, String size, Context context){
         int width = Integer.parseInt(size.split("x")[0]);
         int height = Integer.parseInt(size.split("x")[1]);
 
@@ -56,7 +49,9 @@ public class MediaCodecAction {
     }
 
     public static void ReleaseDecoder(MediaCodec mediaCodec){
-        mediaCodec.stop();
-        mediaCodec.release();
+        if (mediaCodec != null){
+            mediaCodec.stop();
+            mediaCodec.release();
+        }
     }
 }

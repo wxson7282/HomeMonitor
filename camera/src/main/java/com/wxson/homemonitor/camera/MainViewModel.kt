@@ -17,6 +17,7 @@ import android.media.MediaCodec
 import android.media.MediaFormat
 import android.os.IBinder
 import android.os.Message
+import android.preference.PreferenceManager
 import android.util.Log
 import android.util.Size
 import android.util.SparseIntArray
@@ -40,6 +41,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val app = application
     private lateinit var connectStatusListener: IConnectStatusListener
     private val byteBufferTransfer: ByteBufferTransfer
+    private val videoCodecMime: String?                    //视频编码格式
+    private val videoCodecSize: String?                    //视频编码分辨率
+
     /**
      *  on service connected, start CameraIntentService.
      */
@@ -98,7 +102,17 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     init {
         Log.i(TAG, "init")
+        val sharedPreferences = PreferenceManager.getDefaultSharedPreferences(app)
+        //取得预设的编码格式
+        videoCodecMime = sharedPreferences.getString("mime_list", "")
+        //取得预设的分辨率
+        videoCodecSize = sharedPreferences.getString("size_list", "")
+        //
         byteBufferTransfer = ByteBufferTransfer()
+        //为byteBufferTransfer设置编码格式和分辨率
+        byteBufferTransfer.mime = videoCodecMime.toByteArray()
+        byteBufferTransfer.size = videoCodecSize.toByteArray()
+
         bindService()
     }
 
@@ -133,8 +147,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private lateinit var previewRequest: CaptureRequest
     private var surfaceTexture: SurfaceTexture? = null
     var rotation = Surface.ROTATION_0   // 显示设备方向
-    var mime: String? = ""                    //视频编码格式
-    var size  = Size(0, 0)    //视频编码分辨率
 
     private val stateCallback = object : CameraDevice.StateCallback() {
         //  摄像头被打开时激发该方法
@@ -260,7 +272,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
             //region added by wan
             // 根据视频编码类型创建编码器
-            mediaCodec = MediaCodec.createEncoderByType(mime!!)
+            mediaCodec = MediaCodec.createEncoderByType(videoCodecMime!!)
             // Set up Callback for the Encoder
             val mediaCodecCallback = MediaCodecCallback(byteBufferTransfer, this)
             mediaCodec.setCallback(mediaCodecCallback.getCallback())
@@ -275,14 +287,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     cameraIntentService!!.outputThread.handler.sendMessage(msg)
                 }
             })
-
             //取得预设的分辨率
-            val width = size.width
-            val height = size.height
+            val width = Integer.parseInt(videoCodecSize!!.split("x".toRegex()).dropLastWhile { it.isEmpty() }.toTypedArray()[0])
+            val height = Integer.parseInt(videoCodecSize.split("x".toRegex()).dropLastWhile { it.isEmpty() }.toTypedArray()[1])
 
             //set up output mediaFormat
             val codecFormat: IFormatModel
-            if (mime == MediaFormat.MIMETYPE_VIDEO_HEVC) {
+            if (videoCodecMime == MediaFormat.MIMETYPE_VIDEO_HEVC) {
                 codecFormat = H265Format(width, height)
             } else {
                 codecFormat = H264Format(width, height)

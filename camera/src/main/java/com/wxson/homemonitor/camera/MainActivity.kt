@@ -6,7 +6,6 @@ import android.arch.lifecycle.ViewModelProviders
 import android.content.Intent
 import android.content.res.Configuration
 import android.os.Bundle
-import android.preference.PreferenceManager
 import android.support.design.widget.Snackbar
 import android.support.v7.app.AppCompatActivity
 import android.util.Log
@@ -40,19 +39,6 @@ class MainActivity : AppCompatActivity() {
         textureView = findViewById(R.id.textureView)
         textureView.surfaceTextureListener = viewModel.surfaceTextureListener
         viewModel.rotation = this.windowManager.defaultDisplay.rotation
-        //首次运行时设置默认值
-        PreferenceManager.setDefaultValues(this, R.xml.pref_codec, false)
-        //取得预设的编码格式
-        val sharedPreferences = PreferenceManager.getDefaultSharedPreferences(this)
-        viewModel.mime = sharedPreferences.getString("mime_list", "")
-        //取得预设的分辨率
-        val s = sharedPreferences.getString("size_list", "")
-        if (s != null){
-            val prefSize = Size(
-                Integer.parseInt(s.split("x".toRegex()).dropLastWhile { it.isEmpty() }.toTypedArray()[0]),
-                Integer.parseInt(s.split("x".toRegex()).dropLastWhile { it.isEmpty() }.toTypedArray()[1]))
-            viewModel.size = prefSize
-        }
 
         // registers observer for information from viewModel
         val localMsgObserver: Observer<String> = Observer { localMsg -> showMsg(localMsg.toString()) }

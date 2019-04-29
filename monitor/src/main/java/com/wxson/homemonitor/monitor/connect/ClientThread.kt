@@ -14,7 +14,6 @@ import com.wxson.homemonitor.monitor.mediacodec.IInputDataReadyListener
 import java.io.IOException
 import java.io.ObjectInputStream
 import java.io.ObjectOutputStream
-import java.io.OutputStream
 import java.net.ConnectException
 import java.net.NoRouteToHostException
 import java.net.Socket
@@ -28,9 +27,9 @@ class ClientThread(private val handler: Handler, context: Context) : Runnable {
     // 定义接收UI线程的消息的Handler对象
     var revHandler = Handler(Handler.Callback { false })
 
-    // 该线程所处理的Socket所对应的输出流
-    private var outputStream: OutputStream? = null
+    // 该线程所处理的Socket所对应的输入出流
     private var objectOutputStream: ObjectOutputStream? = null
+    private var objectInputStream: ObjectInputStream? = null
     private var firstByteBufferFlag: Int = 1
 
 
@@ -47,13 +46,11 @@ class ClientThread(private val handler: Handler, context: Context) : Runnable {
         try{
             socket = Socket(res.getString(R.string.server_ip_address), res.getInteger(R.integer.ServerSocketPort))
             sendLocalMsg("Connected")
-            outputStream = socket?.outputStream
-            objectOutputStream = if (outputStream != null) ObjectOutputStream(outputStream) else null
+            objectOutputStream = ObjectOutputStream(socket?.getOutputStream())
+            objectInputStream = ObjectInputStream(socket?.getInputStream())
             // 启动一条子线程来读取服务器响应的数据
             object : Thread(){
                 override fun run() {
-                    val inputStream = socket?.getInputStream()
-                    val objectInputStream = if (inputStream != null) ObjectInputStream(inputStream) else null
                     var inputObject: Any? = objectInputStream?.readObject()
                     // 不断读取Socket输入流中的内容
                     while (inputObject != null){
@@ -61,12 +58,13 @@ class ClientThread(private val handler: Handler, context: Context) : Runnable {
                             // ByteBufferTransfer is received
                             "ByteBufferTransfer" -> {
                                 Log.i(TAG, "接收到ByteBufferTransfer类")
-                                val byteBufferTransfer = inputObject as ByteBufferTransfer
+                                val byteBufferTransfer: ByteBufferTransfer = inputObject as ByteBufferTransfer
+                                Log.i(TAG, "byteBufferTransfer time=${byteBufferTransfer.bufferInfoPresentationTimeUs} size=${byteBufferTransfer.bufferInfoSize}")
                                 // 接收到首个byteBufferTransfer既第一帧视频
                                 if (firstByteBufferFlag == 1){
                                     firstByteBufferFlag++
                                     //触发FirstByteBufferListener，通知MonitorTextureView准备解码器
-                                    firstByteBufferListener.onFirstByteBufferArrived(byteBufferTransfer.csd)
+                                    firstByteBufferListener.onFirstByteBufferArrived(byteBufferTransfer.csd, String(byteBufferTransfer.mime), String(byteBufferTransfer.size))
                                 }
                                 //如果FirstByteBuffer已到 decode已经启动
                                 if (firstByteBufferFlag > 1){
@@ -94,8 +92,7 @@ class ClientThread(private val handler: Handler, context: Context) : Runnable {
                                 Log.i(TAG, "接收到其它类 ${inputObject.javaClass.simpleName}")
                             }
                         }
-
-                        // read next from socket
+                        // read next object from socket
                         inputObject = objectInputStream?.readObject()
                     }
                 }
@@ -135,8 +132,12 @@ class ClientThread(private val handler: Handler, context: Context) : Runnable {
             System.exit(1)
         }
         finally {
+            objectOutputStream?.close()
+            objectInputStream?.close()
+//            outputStream?.close()
+//            inputStream?.close()
             socket?.close()
-            socket = null
+//            socket = null
             sendLocalMsg("Disconnected")
         }
     }

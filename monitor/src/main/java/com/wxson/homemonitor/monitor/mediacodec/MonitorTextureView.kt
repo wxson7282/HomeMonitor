@@ -43,10 +43,10 @@ class MonitorTextureView(private val mContext: Context, attrs: AttributeSet) : T
     //注册首帧数据监听器
     private fun registerFirstByteBufferListener() {
         val firstByteBufferListener = object : IFirstByteBufferListener {
-            override fun onFirstByteBufferArrived(csd: ByteArray) {
+            override fun onFirstByteBufferArrived(csd: ByteArray, mime: String, size: String) {
                 //准备解码器
                 val surface = Surface(super@MonitorTextureView.getSurfaceTexture())
-                mediaCodec = MediaCodecAction.PrepareDecoder(surface, csd, mContext)
+                mediaCodec = MediaCodecAction.PrepareDecoder(surface, csd, mime, size, mContext)
                 //启动解码器
                 MediaCodecAction.StartDecoder(mediaCodec)
                 Log.i(TAG, "onFirstByteBufferArrived StartDecoder")

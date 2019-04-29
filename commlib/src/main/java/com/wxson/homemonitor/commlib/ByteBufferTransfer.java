@@ -1,5 +1,7 @@
 package com.wxson.homemonitor.commlib;
 
+import android.support.annotation.NonNull;
+
 import java.io.Serializable;
 
 /**
@@ -7,14 +9,14 @@ import java.io.Serializable;
  * Package com.wxson.common_lib.
  */
 public class ByteBufferTransfer implements Serializable {
-    //MD5码
-    private String mMd5;
     private byte[] mByteArray;
     private int mBufferInfoFlags;
     private int mBufferInfoOffset;
     private long mBufferInfoPresentationTimeUs;
     private int mBufferInfoSize;
     private byte[] mCsd = null;
+    private byte[] mMime;
+    private byte[] mSize;
 
     public void setByteArray(byte[] byteArray) {
         this.mByteArray = byteArray;
@@ -23,14 +25,6 @@ public class ByteBufferTransfer implements Serializable {
     public byte[] getByteArray() {
         return mByteArray;
     }
-
-//    public void setBufferInfo(MediaCodec.BufferInfo bufferInfo) {
-//        this.mBufferInfo = bufferInfo;
-//    }
-
-//    public MediaCodec.BufferInfo getBufferInfo() {
-//        return mBufferInfo;
-//    }
 
     public int getBufferInfoFlags() {
         return mBufferInfoFlags;
@@ -64,13 +58,13 @@ public class ByteBufferTransfer implements Serializable {
         this.mBufferInfoSize = bufferInfoSize;
     }
 
-    public String getMd5() {
-        return mMd5;
-    }
+    public byte[] getMime(){ return mMime; }
 
-    public void setMd5(String mMd5) {
-        this.mMd5 = mMd5;
-    }
+    public void setMime(byte[] mime){ this.mMime = mime; }
+
+    public byte[] getSize(){ return mSize; }
+
+    public void setSize(byte[] size){ this.mSize = size; }
 
     public byte[] getCsd() {
         return mCsd;
@@ -80,8 +74,9 @@ public class ByteBufferTransfer implements Serializable {
         this.mCsd = csd;
     }
 
+    @NonNull
     @Override
     public String toString() {
-        return "ByteBufferTransfer{ ByteBufferSize=" + mByteArray.length + ", md5='" + mMd5 + "' }" ;
+        return "ByteBufferTransfer{ ByteBufferSize=" + mByteArray.length + " }" ;
     }
 }

@@ -48,13 +48,12 @@ class DecoderCallback {
                     long timeStamp = 0;
                     inputBuffer.clear();
                     if (mInputDataReady){
-//                        inputBuffer.clear();
                         //如果输入数据准备好，注入解码器
                         length = mBufferInfo.size;
                         timeStamp = mBufferInfo.presentationTimeUs;
                         inputBuffer.put(mInputData, 0, length);
                         mInputDataReady = false;
-                        Log.e(TAG, "输入数据注入解码器");
+                        Log.e(TAG, "输入数据注入解码器 length=" + length + " timeStamp=" + timeStamp );
                     }
                     //把inputBuffer放回队列
                     mediaCodec.queueInputBuffer(inputBufferId,0, length, timeStamp,0);

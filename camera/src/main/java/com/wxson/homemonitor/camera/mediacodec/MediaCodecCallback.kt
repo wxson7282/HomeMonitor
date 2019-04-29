@@ -29,7 +29,7 @@ class MediaCodecCallback(byteBufferTransfer: ByteBufferTransfer, mainViewModel: 
             if (outputBuffer != null) {
                 csd = GetCsd(outputBuffer)
                 if (csd != null) {
-                    byteBufferTransfer.setCsd(csd)
+                    byteBufferTransfer.csd = csd
                 }
             }
             //endregion
@@ -39,8 +39,8 @@ class MediaCodecCallback(byteBufferTransfer: ByteBufferTransfer, mainViewModel: 
                 //启动帧数据传输
                 Log.i(TAG, "onOutputBufferAvailable  start to send byteBufferTransfer")
                 //从outputBuffer中取出byte[]
-                val bytes = ByteArray(outputBuffer!!.remaining())
-                outputBuffer!!.get(bytes)
+                val bytes = ByteArray(outputBuffer.remaining())
+                outputBuffer.get(bytes)
                 byteBufferTransfer.byteArray = bytes
                 byteBufferTransfer.bufferInfoFlags = bufferInfo.flags
                 byteBufferTransfer.bufferInfoOffset = bufferInfo.offset
@@ -52,9 +52,6 @@ class MediaCodecCallback(byteBufferTransfer: ByteBufferTransfer, mainViewModel: 
 
                 Log.i(TAG, "onOutputBufferAvailable finish to send byteBufferTransfer")
             }
-//            else {
-//                Log.e(TAG, "onOutputBufferAvailable outputBuffer：null")
-//            }
             mediaCodec.releaseOutputBuffer(index, false)
         }
 

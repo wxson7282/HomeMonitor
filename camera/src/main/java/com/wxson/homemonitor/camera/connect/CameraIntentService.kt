@@ -7,6 +7,7 @@ import android.content.Intent
 import android.os.*
 import android.util.Log
 import com.wxson.homemonitor.camera.R
+import com.wxson.homemonitor.commlib.ByteBufferTransfer
 import com.wxson.homemonitor.commlib.LocalException
 import java.io.IOException
 import java.io.ObjectInputStream
@@ -166,7 +167,8 @@ class ServerInputThread(private var clientSocket: Socket) : Runnable {
  */
 class ServerOutputThread(clientSocket: Socket) : Runnable{
     private val TAG = this.javaClass.simpleName
-    private val objectOutputStream: ObjectOutputStream = ObjectOutputStream(clientSocket.getOutputStream())
+    private val socket = clientSocket
+    private val objectOutputStream: ObjectOutputStream = ObjectOutputStream(socket.getOutputStream())
     // 定义接收外部线程的消息的Handler对象
     var handler = Handler(Handler.Callback { false })
 
@@ -192,7 +194,10 @@ class ServerOutputThread(clientSocket: Socket) : Runnable{
 
     private fun writeObjectToClient(obj: Any){
         try {
+//            val objectOutputStream = ObjectOutputStream(socket.getOutputStream())
             objectOutputStream.writeObject(obj)
+            val testObject: ByteBufferTransfer = obj as ByteBufferTransfer
+            Log.e(TAG, "writeObjectToClient ByteBufferTransfer time= ${testObject.bufferInfoPresentationTimeUs} size= ${testObject.bufferInfoSize}")
         }
         catch (e: IOException){
             Log.i(TAG, "writeObjectToClient: socket is closed")
