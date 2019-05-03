@@ -31,7 +31,6 @@ import com.wxson.homemonitor.camera.mediacodec.MediaCodecCallback
 import com.wxson.homemonitor.commlib.*
 import java.io.File
 import java.io.FileOutputStream
-import java.io.IOException
 import java.net.InetAddress
 import java.text.SimpleDateFormat
 import java.util.*
@@ -40,7 +39,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val TAG = this.javaClass.simpleName
     private val app = application
     private lateinit var connectStatusListener: IConnectStatusListener
-    private val byteBufferTransfer: ByteBufferTransfer
+//    private val byteBufferTransfer: ByteBufferTransfer
     private val videoCodecMime: String?                    //视频编码格式
     private val videoCodecSize: String?                    //视频编码分辨率
 
@@ -102,16 +101,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     init {
         Log.i(TAG, "init")
+        //首次运行时设置默认值
+        PreferenceManager.setDefaultValues(app, R.xml.pref_codec, false)
         val sharedPreferences = PreferenceManager.getDefaultSharedPreferences(app)
         //取得预设的编码格式
         videoCodecMime = sharedPreferences.getString("mime_list", "")
         //取得预设的分辨率
         videoCodecSize = sharedPreferences.getString("size_list", "")
-        //
-        byteBufferTransfer = ByteBufferTransfer()
-        //为byteBufferTransfer设置编码格式和分辨率
-        byteBufferTransfer.mime = videoCodecMime.toByteArray()
-        byteBufferTransfer.size = videoCodecSize.toByteArray()
 
         bindService()
     }
@@ -274,7 +270,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             // 根据视频编码类型创建编码器
             mediaCodec = MediaCodec.createEncoderByType(videoCodecMime!!)
             // Set up Callback for the Encoder
-            val mediaCodecCallback = MediaCodecCallback(byteBufferTransfer, this)
+            val mediaCodecCallback = MediaCodecCallback(videoCodecMime, videoCodecSize!!, this)
             mediaCodec.setCallback(mediaCodecCallback.getCallback())
             //设置监听器
             // to inform MainViewModel onOutputBufferAvailable in MediaCodecCallback
@@ -348,8 +344,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             //endregion
         } catch (e: CameraAccessException) {
             e.printStackTrace()
-        } catch (ie: IOException) {
-            ie.printStackTrace()
         }
     }
 

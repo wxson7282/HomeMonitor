@@ -54,6 +54,7 @@ class ClientThread(private val handler: Handler, context: Context) : Runnable {
                     var inputObject: Any? = objectInputStream?.readObject()
                     // 不断读取Socket输入流中的内容
                     while (inputObject != null){
+//                        Log.e(TAG, "byteBufferTransfer time=${(inputObject as ByteBufferTransfer).bufferInfoPresentationTimeUs}")
                         when (inputObject.javaClass.simpleName){
                             // ByteBufferTransfer is received
                             "ByteBufferTransfer" -> {
@@ -81,7 +82,7 @@ class ClientThread(private val handler: Handler, context: Context) : Runnable {
                             // Byte array is received
                             "byte[]" -> {
                                 // 每当读到来自服务器的文字数据之后，发送消息通知  程序界面显示该数据
-                                Log.i(TAG, "接收到byte[]类")
+                                Log.e(TAG, "接收到byte[]类 内容：$inputObject")
                                 val msg = Message()
                                 msg.what = 0x123
                                 msg.obj = inputObject

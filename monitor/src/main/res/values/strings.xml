@@ -1,5 +1,5 @@
 <resources>
     <string name="app_name">监视器</string>
-    <string name="server_ip_address">114.250.131.166</string>
+    <string name="server_ip_address">114.252.252.168</string>
     <string name="local_server_ip_address">192.168.31.63</string>
 </resources>

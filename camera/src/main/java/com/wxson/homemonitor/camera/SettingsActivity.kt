@@ -82,14 +82,14 @@ class SettingsActivity : AppCompatPreferenceActivity() {
             val availableMimeValues = MediaCodecUtil.getMimeList(mimeListValues)
             val availableMimeTitles: Array<CharSequence>
             var index: Int
-            val MimeTitles = ArrayList<CharSequence>()
+            val mimeTitles = ArrayList<CharSequence>()
             for (mimeValue in availableMimeValues) {
                 index = listPreferenceMime.findIndexOfValue(mimeValue.toString())
                 if (index != -1) {
-                    MimeTitles.add(mimeListTitles[index])
+                    mimeTitles.add(mimeListTitles[index])
                 }
             }
-            availableMimeTitles = MimeTitles.toTypedArray()
+            availableMimeTitles = mimeTitles.toTypedArray()
             listPreferenceMime.entries = availableMimeTitles
             listPreferenceMime.setEntryValues(availableMimeValues)
             //根据设备特性设定编码器类型可选项 end

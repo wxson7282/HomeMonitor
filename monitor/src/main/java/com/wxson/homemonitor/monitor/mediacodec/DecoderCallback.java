@@ -53,7 +53,7 @@ class DecoderCallback {
                         timeStamp = mBufferInfo.presentationTimeUs;
                         inputBuffer.put(mInputData, 0, length);
                         mInputDataReady = false;
-                        Log.e(TAG, "输入数据注入解码器 length=" + length + " timeStamp=" + timeStamp );
+                        Log.i(TAG, "输入数据注入解码器 length=" + length + " timeStamp=" + timeStamp );
                     }
                     //把inputBuffer放回队列
                     mediaCodec.queueInputBuffer(inputBufferId,0, length, timeStamp,0);

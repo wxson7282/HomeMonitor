@@ -165,12 +165,13 @@ class ServerInputThread(private var clientSocket: Socket) : Runnable {
  * The thread for sending image data from MediaCodec.Buffer
  * Output timing is onOutputBufferAvailable
  */
-class ServerOutputThread(clientSocket: Socket) : Runnable{
+class ServerOutputThread(private var clientSocket: Socket) : Runnable {
     private val TAG = this.javaClass.simpleName
-    private val socket = clientSocket
-    private val objectOutputStream: ObjectOutputStream = ObjectOutputStream(socket.getOutputStream())
+    private val objectOutputStream: ObjectOutputStream = ObjectOutputStream(clientSocket.getOutputStream())
     // 定义接收外部线程的消息的Handler对象
     var handler = Handler(Handler.Callback { false })
+
+    var frameCount: Long = 0
 
     override fun run() {
         while (true) {
@@ -181,6 +182,9 @@ class ServerOutputThread(clientSocket: Socket) : Runnable{
                         // ByteBuffer data
                         if (msg.what == 0x333){
                             writeObjectToClient(msg.obj)
+//                            frameCount++
+//                            writeObjectToClient(frameCount.toString().toByteArray())
+//                            Log.e(TAG, "frameCount=$frameCount")
                         }
                     }
                 }
@@ -194,7 +198,6 @@ class ServerOutputThread(clientSocket: Socket) : Runnable{
 
     private fun writeObjectToClient(obj: Any){
         try {
-//            val objectOutputStream = ObjectOutputStream(socket.getOutputStream())
             objectOutputStream.writeObject(obj)
             val testObject: ByteBufferTransfer = obj as ByteBufferTransfer
             Log.e(TAG, "writeObjectToClient ByteBufferTransfer time= ${testObject.bufferInfoPresentationTimeUs} size= ${testObject.bufferInfoSize}")

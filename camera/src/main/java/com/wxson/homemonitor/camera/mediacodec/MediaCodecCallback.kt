@@ -8,11 +8,12 @@ import com.wxson.homemonitor.commlib.AvcUtils.GetCsd
 import com.wxson.homemonitor.commlib.ByteBufferTransfer
 import com.wxson.homemonitor.commlib.IConnectStatusListener
 
-class MediaCodecCallback(byteBufferTransfer: ByteBufferTransfer, mainViewModel: MainViewModel) {
+class MediaCodecCallback(val mime: String, val size: String, mainViewModel: MainViewModel) {
     private val TAG = this.javaClass.simpleName
     private var isClientConnected = false
     //to inform MainViewModel of being onOutputBufferAvailable in MediaCodecCallback
     private lateinit var byteBufferListener: IByteBufferListener
+    private var firstFrameCsd: ByteArray? = null
 
     private val mediaCodecCallback = object : MediaCodec.Callback() {
         override fun onInputBufferAvailable(mediaCodec: MediaCodec, i: Int) {
@@ -21,20 +22,22 @@ class MediaCodecCallback(byteBufferTransfer: ByteBufferTransfer, mainViewModel: 
 
         override fun onOutputBufferAvailable(mediaCodec: MediaCodec, index: Int, bufferInfo: MediaCodec.BufferInfo) {
             Log.i(TAG, "onOutputBufferAvailable")
-            //region for debug only
-            //取得ByteBuffer
+            //取得outputBuffer
             val outputBuffer = mediaCodec.getOutputBuffer(index)
-
+            val byteBufferTransfer = ByteBufferTransfer()
             val csd: ByteArray?
             if (outputBuffer != null) {
                 csd = GetCsd(outputBuffer)
                 if (csd != null) {
-                    byteBufferTransfer.csd = csd
+                    // in first frame video data
+                    firstFrameCsd = csd
                 }
+                byteBufferTransfer.csd = firstFrameCsd
+                byteBufferTransfer.mime = mime.toByteArray()
+                byteBufferTransfer.size = size.toByteArray()
             }
-            //endregion
 
-            //取得ByteBuffer
+            //设置byteBufferTransfer
             if (outputBuffer != null && isClientConnected) {
                 //启动帧数据传输
                 Log.i(TAG, "onOutputBufferAvailable  start to send byteBufferTransfer")

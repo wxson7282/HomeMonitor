@@ -18,7 +18,7 @@ import kotlinx.android.synthetic.main.activity_main.*
 import pub.devrel.easypermissions.EasyPermissions
 
 
-class MainActivity : AppCompatActivity() {
+class MainActivity : AppCompatActivity(), EasyPermissions.PermissionCallbacks {
 
     private val TAG = this.javaClass.simpleName
 
@@ -52,6 +52,9 @@ class MainActivity : AppCompatActivity() {
 
         val surfaceTextureStatusObserver: Observer<String> = Observer { msg -> surfaceTextureStatusHandler(msg.toString()) }
         viewModel.getSurfaceTextureStatus().observe(this, surfaceTextureStatusObserver)
+
+//        //首次运行时设置默认值
+//        PreferenceManager.setDefaultValues(this, R.xml.pref_codec, false)
 
 //        fab.setOnClickListener { view ->
 //            if(IsTcpSocketServiceOn)
@@ -121,6 +124,28 @@ class MainActivity : AppCompatActivity() {
                 REQUEST_CAMERA_PERMISSION, perms
             )
         }
+    }
+
+    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
+        Log.i(TAG, "onRequestPermissionsResult")
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        // Forward results to EasyPermissions
+        EasyPermissions.onRequestPermissionsResult(requestCode, permissions, grantResults, this)
+    }
+
+    override fun onPermissionsDenied(requestCode: Int, perms: MutableList<String>) {
+        Log.i(TAG, "onPermissionsDenied")
+        Log.i(TAG, "获取权限失败，退出当前页面$perms")
+        showMsg("获取权限失败")
+        this.finish()  //退出当前页面
+    }
+
+    override fun onPermissionsGranted(requestCode: Int, perms: MutableList<String>) {
+        Log.i(TAG, "onPermissionsGranted")
+        Log.i(TAG, "获取权限成功$perms")
+        showMsg("获取权限成功")
+        //打开相机
+        viewModel.openCamera()
     }
 
     private fun surfaceTextureStatusHandler(msg: String){
