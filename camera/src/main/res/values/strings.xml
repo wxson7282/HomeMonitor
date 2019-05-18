@@ -21,24 +21,20 @@
 
     <string name="pref_title_size_select">分辨率</string>
     <string-array name="pref_size_list_titles">
+        <item>240x160</item>
         <item>320x240</item>
         <item>640x480</item>
-        <item>800x600</item>
         <item>960x720</item>
         <item>1280x720</item>
         <item>1440x1080</item>
-        <item>1920x1080</item>
-        <item>1920x1440</item>
     </string-array>
     <string-array name="pref_size_list_values">
+        <item>240x160</item>
         <item>320x240</item>
         <item>640x480</item>
-        <item>800x600</item>
         <item>960x720</item>
         <item>1280x720</item>
         <item>1440x1080</item>
-        <item>1920x1080</item>
-        <item>1920x1440</item>
     </string-array>
 
     <!-- Example settings for Data & Sync -->

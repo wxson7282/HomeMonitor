@@ -1,5 +1,14 @@
 <resources>
     <string name="app_name">监视器</string>
-    <string name="server_ip_address">114.252.252.168</string>
+    <string name="server_ip_address">114.250.116.79</string>
     <string name="local_server_ip_address">192.168.31.63</string>
+    <string name="title_activity_settings">Settings</string>
+    <string name="action_settings">Settings</string>
+
+    <!-- Preference Titles -->
+    <string name="connect_header">连接设置</string>
+
+    <!-- Messages Preferences -->
+    <string name="server_ip_title">服务器IP地址</string>
+
 </resources>

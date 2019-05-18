@@ -1,6 +1,6 @@
 package com.wxson.homemonitor.commlib;
 
-import android.support.annotation.NonNull;
+import androidx.annotation.NonNull;
 
 import java.io.Serializable;
 

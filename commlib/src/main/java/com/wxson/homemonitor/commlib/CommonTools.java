@@ -37,5 +37,4 @@ public class CommonTools {
         }
         return bytes;
     }
-
 }

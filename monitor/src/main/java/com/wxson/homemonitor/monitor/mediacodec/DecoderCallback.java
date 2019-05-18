@@ -2,7 +2,7 @@ package com.wxson.homemonitor.monitor.mediacodec;
 
 import android.media.MediaCodec;
 import android.media.MediaFormat;
-import android.support.annotation.NonNull;
+import androidx.annotation.NonNull;
 import android.util.Log;
 import com.wxson.homemonitor.monitor.connect.ClientThread;
 

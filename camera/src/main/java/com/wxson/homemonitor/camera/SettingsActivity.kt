@@ -10,9 +10,11 @@ import android.media.RingtoneManager
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.os.Handler
 import android.preference.*
 import android.text.TextUtils
 import android.view.MenuItem
+import androidx.core.content.ContextCompat.startActivity
 import com.wxson.homemonitor.commlib.MediaCodecUtil
 import java.util.*
 
@@ -179,13 +181,12 @@ class SettingsActivity : AppCompatPreferenceActivity() {
             if (preference is ListPreference) {
                 // For list preferences, look up the correct display value in
                 // the preference's 'entries' list.
-                val listPreference = preference
-                val index = listPreference.findIndexOfValue(stringValue)
+                val index = preference.findIndexOfValue(stringValue)
 
                 // Set the summary to reflect the new value.
                 preference.setSummary(
                     if (index >= 0)
-                        listPreference.entries[index]
+                        preference.entries[index]
                     else
                         null
                 )
@@ -217,6 +218,21 @@ class SettingsActivity : AppCompatPreferenceActivity() {
                 // For all other preferences, set the summary to the value's
                 // simple string representation.
                 preference.summary = stringValue
+            }
+            // after preference's changing, restart app
+            if (preference.key == "mime_list"){
+                val oldValue = PreferenceManager.
+                    getDefaultSharedPreferences(preference.context).getString("mime_list", "")
+                if (value != oldValue){
+                    restartApp(preference.context)
+                }
+            }
+            if (preference.key == "size_list"){
+                val oldValue = PreferenceManager.
+                    getDefaultSharedPreferences(preference.context).getString("size_list", "")
+                if (value != oldValue){
+                    restartApp(preference.context)
+                }
             }
             true
         }
@@ -250,6 +266,17 @@ class SettingsActivity : AppCompatPreferenceActivity() {
                     .getDefaultSharedPreferences(preference.context)
                     .getString(preference.key, "")
             )
+        }
+
+        /**
+         * restart app after 100ms
+         */
+        private fun restartApp(context: Context){
+            Handler().postDelayed(Runnable {
+                val launchIntent = context.packageManager?.getLaunchIntentForPackage(context.packageName)
+                launchIntent?.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP)
+                startActivity(context, launchIntent!!, null)
+            }, 100)
         }
     }
 }

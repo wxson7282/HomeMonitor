@@ -1,17 +1,17 @@
 package com.wxson.homemonitor.monitor.ui.main
 
 import android.app.Application
-import android.arch.lifecycle.AndroidViewModel
-import android.arch.lifecycle.LiveData
-import android.arch.lifecycle.MutableLiveData
 import android.os.Handler
 import android.os.Message
 import android.util.Log
+import androidx.lifecycle.AndroidViewModel
+import androidx.lifecycle.LiveData
+import androidx.lifecycle.MutableLiveData
 import com.wxson.homemonitor.monitor.connect.ClientThread
 import java.lang.ref.WeakReference
 
 
-class MainViewModel(application: Application) : AndroidViewModel(application) {
+class MainViewModel(application: Application) : AndroidViewModel(application){
 
     private val TAG = this.javaClass.simpleName
 

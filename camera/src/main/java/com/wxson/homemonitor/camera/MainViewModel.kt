@@ -2,9 +2,6 @@ package com.wxson.homemonitor.camera
 
 import android.annotation.SuppressLint
 import android.app.Application
-import android.arch.lifecycle.AndroidViewModel
-import android.arch.lifecycle.LiveData
-import android.arch.lifecycle.MutableLiveData
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
@@ -15,7 +12,9 @@ import android.hardware.camera2.*
 import android.media.ImageReader
 import android.media.MediaCodec
 import android.media.MediaFormat
+import android.os.Handler
 import android.os.IBinder
+import android.os.Looper
 import android.os.Message
 import android.preference.PreferenceManager
 import android.util.Log
@@ -23,6 +22,9 @@ import android.util.Size
 import android.util.SparseIntArray
 import android.view.Surface
 import android.view.TextureView
+import androidx.lifecycle.AndroidViewModel
+import androidx.lifecycle.LiveData
+import androidx.lifecycle.MutableLiveData
 import com.wxson.homemonitor.camera.connect.CameraIntentService
 import com.wxson.homemonitor.camera.connect.IStringTransferListener
 import com.wxson.homemonitor.camera.connect.IsTcpSocketServiceOn
@@ -40,8 +42,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val app = application
     private lateinit var connectStatusListener: IConnectStatusListener
 //    private val byteBufferTransfer: ByteBufferTransfer
-    private val videoCodecMime: String?                    //视频编码格式
-    private val videoCodecSize: String?                    //视频编码分辨率
+//    private var videoCodecMime: String?                    //视频编码格式
+//    private var videoCodecSize: String?                    //视频编码分辨率
 
     /**
      *  on service connected, start CameraIntentService.
@@ -101,13 +103,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     init {
         Log.i(TAG, "init")
-        //首次运行时设置默认值
-        PreferenceManager.setDefaultValues(app, R.xml.pref_codec, false)
-        val sharedPreferences = PreferenceManager.getDefaultSharedPreferences(app)
-        //取得预设的编码格式
-        videoCodecMime = sharedPreferences.getString("mime_list", "")
-        //取得预设的分辨率
-        videoCodecSize = sharedPreferences.getString("size_list", "")
+//        //首次运行时设置默认值
+//        PreferenceManager.setDefaultValues(app, R.xml.pref_codec, false)
+//        val sharedPreferences = PreferenceManager.getDefaultSharedPreferences(app)
+//        //取得预设的编码格式
+//        videoCodecMime = sharedPreferences.getString("mime_list", "")
+//        //取得预设的分辨率
+//        videoCodecSize = sharedPreferences.getString("size_list", "")
 
         bindService()
     }
@@ -267,6 +269,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             previewRequestBuilder.addTarget(Surface(surfaceTexture))
 
             //region added by wan
+            //首次运行时设置默认值
+            PreferenceManager.setDefaultValues(app, R.xml.pref_codec, false)
+            val sharedPreferences = PreferenceManager.getDefaultSharedPreferences(app)
+            //取得预设的编码格式
+            val videoCodecMime = sharedPreferences.getString("mime_list", "")
+            //取得预设的分辨率
+            val videoCodecSize = sharedPreferences.getString("size_list", "")
             // 根据视频编码类型创建编码器
             mediaCodec = MediaCodec.createEncoderByType(videoCodecMime!!)
             // Set up Callback for the Encoder
@@ -280,11 +289,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     val msg = Message()
                     msg.what = 0x333
                     msg.obj = byteBufferTransfer
-                    cameraIntentService!!.outputThread.handler.sendMessage(msg)
+                    cameraIntentService!!.outputThread?.handler?.sendMessage(msg)
                 }
             })
             //取得预设的分辨率
-            val width = Integer.parseInt(videoCodecSize!!.split("x".toRegex()).dropLastWhile { it.isEmpty() }.toTypedArray()[0])
+            val width = Integer.parseInt(videoCodecSize.split("x".toRegex()).dropLastWhile { it.isEmpty() }.toTypedArray()[0])
             val height = Integer.parseInt(videoCodecSize.split("x".toRegex()).dropLastWhile { it.isEmpty() }.toTypedArray()[1])
 
             //set up output mediaFormat
@@ -296,7 +305,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             }
 
             // configure mediaCodec
-            mediaCodec.configure(codecFormat.getEncodeFormat(), null, null, MediaCodec.CONFIGURE_FLAG_ENCODE)
+            mediaCodec.configure(codecFormat.encodeFormat, null, null, MediaCodec.CONFIGURE_FLAG_ENCODE)
 
             // Set up Surface for the Encoder
             val encoderInputSurface = MediaCodec.createPersistentInputSurface()
@@ -481,8 +490,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             Log.i(TAG, "onStringArrived")
             localMsgLiveData.postValue("arrivedString:$arrivedString clientInetAddress:$clientInetAddress")
             // Take a photo on command of client
-            if (arrivedString == "capture"){
-                captureStillPicture()
+            if (arrivedString == "Capture Still Picture") {
+                // to do in main thread
+                Handler(Looper.getMainLooper()).post { captureStillPicture() }
             }
         }
 
@@ -500,7 +510,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     }
                 }
                 "TcpSocketClientStatus" -> {
-                    when (msg){
+                    when (msg) {
                         "ON" -> {
                             isClientConnectedLiveData.postValue(true)
                             connectStatusListener.onConnectStatusChanged(true)

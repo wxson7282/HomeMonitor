@@ -24,7 +24,7 @@ private lateinit var StringTransferListener: IStringTransferListener
  */
 class CameraIntentService : IntentService("CameraIntentService") {
     private val TAG = "CameraIntentService"
-    lateinit var outputThread: ServerOutputThread
+    var outputThread: ServerOutputThread? = null
 
     override fun onHandleIntent(intent: Intent?) {
         when (intent?.action) {

@@ -1,19 +1,18 @@
 package com.wxson.homemonitor.monitor.ui.main
 
-import android.arch.lifecycle.Observer
-import android.arch.lifecycle.ViewModelProviders
 import android.os.Bundle
-import android.support.design.widget.Snackbar
-import android.support.v4.app.Fragment
 import android.util.Log
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.widget.ImageView
+import androidx.lifecycle.Observer
+import androidx.lifecycle.ViewModelProviders
+import com.google.android.material.snackbar.Snackbar
 import com.wxson.homemonitor.monitor.R
 import kotlinx.android.synthetic.main.main_fragment.*
 
-class MainFragment : Fragment() {
+class MainFragment : androidx.fragment.app.Fragment() {
 
     private val TAG = this.javaClass.simpleName
 
@@ -29,9 +28,8 @@ class MainFragment : Fragment() {
         inflater: LayoutInflater, container: ViewGroup?,
         savedInstanceState: Bundle?
     ): View {
-        val rootView = inflater.inflate(R.layout.main_fragment, container, false)
-//        imageConnectStatus = activity!!.findViewById(R.id.imageConnected)
-        return rootView
+        //        imageConnectStatus = activity!!.findViewById(R.id.imageConnected)
+        return inflater.inflate(R.layout.main_fragment, container, false)
     }
 
     override fun onActivityCreated(savedInstanceState: Bundle?) {
@@ -44,18 +42,22 @@ class MainFragment : Fragment() {
         fab.setOnClickListener{
                 view ->
             if (isConnected){
-                if (viewModel.transferStatus == MainViewModel.TransferStatus.OFF)
-                    Snackbar.make(view, "开始传送", Snackbar.LENGTH_LONG)
-                        .setAction("确定", View.OnClickListener{
-                            viewModel.sendMsgToServer("Start Video Transfer")
-                            viewModel.transferStatus = MainViewModel.TransferStatus.ON
-                        }).show()
-                else
-                    Snackbar.make(view, "停止传送", Snackbar.LENGTH_LONG)
-                        .setAction("确定", View.OnClickListener{
-                            viewModel.sendMsgToServer("Stop Video Transfer")
-                            viewModel.transferStatus = MainViewModel.TransferStatus.OFF
-                        }).show()
+
+                Snackbar.make(view, "服务器端拍照", Snackbar.LENGTH_SHORT).show()
+                viewModel.sendMsgToServer("Capture Still Picture")
+
+//                if (viewModel.transferStatus == MainViewModel.TransferStatus.OFF)
+//                    Snackbar.make(view, "开始传送", Snackbar.LENGTH_LONG)
+//                        .setAction("确定", View.OnClickListener{
+//                            viewModel.sendMsgToServer("Start Video Transfer")
+//                            viewModel.transferStatus = MainViewModel.TransferStatus.ON
+//                        }).show()
+//                else
+//                    Snackbar.make(view, "停止传送", Snackbar.LENGTH_LONG)
+//                        .setAction("确定", View.OnClickListener{
+//                            viewModel.sendMsgToServer("Stop Video Transfer")
+//                            viewModel.transferStatus = MainViewModel.TransferStatus.OFF
+//                        }).show()
             }
             else {
                 showMsg("服务器未连接")

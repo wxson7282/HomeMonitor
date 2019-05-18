@@ -1,18 +1,18 @@
 package com.wxson.homemonitor.camera
 
 import android.Manifest
-import android.arch.lifecycle.Observer
-import android.arch.lifecycle.ViewModelProviders
 import android.content.Intent
 import android.content.res.Configuration
 import android.os.Bundle
-import android.support.design.widget.Snackbar
-import android.support.v7.app.AppCompatActivity
 import android.util.Log
 import android.util.Size
 import android.view.Menu
 import android.view.MenuItem
 import android.widget.ImageView
+import androidx.appcompat.app.AppCompatActivity
+import androidx.lifecycle.Observer
+import androidx.lifecycle.ViewModelProviders
+import com.google.android.material.snackbar.Snackbar
 import com.wxson.homemonitor.commlib.AutoFitTextureView
 import kotlinx.android.synthetic.main.activity_main.*
 import pub.devrel.easypermissions.EasyPermissions
@@ -29,6 +29,7 @@ class MainActivity : AppCompatActivity(), EasyPermissions.PermissionCallbacks {
     private val REQUEST_CAMERA_PERMISSION = 1
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        Log.i(TAG, "onCreate")
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
         setSupportActionBar(toolbar)
@@ -53,22 +54,6 @@ class MainActivity : AppCompatActivity(), EasyPermissions.PermissionCallbacks {
         val surfaceTextureStatusObserver: Observer<String> = Observer { msg -> surfaceTextureStatusHandler(msg.toString()) }
         viewModel.getSurfaceTextureStatus().observe(this, surfaceTextureStatusObserver)
 
-//        //首次运行时设置默认值
-//        PreferenceManager.setDefaultValues(this, R.xml.pref_codec, false)
-
-//        fab.setOnClickListener { view ->
-//            if(IsTcpSocketServiceOn)
-//                Snackbar.make(view, "关闭相机监控服务", Snackbar.LENGTH_LONG)
-//                    .setAction("确定", View.OnClickListener {
-//                        viewModel.cameraIntentService.stopTcpSocketService()
-//                    }).show()
-//            else
-//                Snackbar.make(view, "启动相机监控服务", Snackbar.LENGTH_LONG)
-//                    .setAction("确定", View.OnClickListener {
-//                        CameraIntentService.startActionTcp(this)
-//                    }).show()
-//        }
-//        viewModel.bindService()
     }
 
     override fun onCreateOptionsMenu(menu: Menu): Boolean {
@@ -95,8 +80,13 @@ class MainActivity : AppCompatActivity(), EasyPermissions.PermissionCallbacks {
         return returnValue
     }
 
+    override fun onConfigurationChanged(newConfig: Configuration?) {
+        super.onConfigurationChanged(newConfig)
+        Log.i(TAG, "onConfigurationChanged")
+    }
+
     private fun showMsg(msg: String){
-        Snackbar.make(fab, msg, Snackbar.LENGTH_LONG).show()
+        Snackbar.make(textureView, msg, Snackbar.LENGTH_LONG).show()
     }
 
     private fun setPreviewSize(previewSize: Size){

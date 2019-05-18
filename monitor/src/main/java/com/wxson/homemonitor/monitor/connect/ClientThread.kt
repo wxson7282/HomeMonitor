@@ -6,20 +6,23 @@ import android.media.MediaCodec
 import android.os.Handler
 import android.os.Looper
 import android.os.Message
+import android.preference.PreferenceManager
 import android.util.Log
 import com.wxson.homemonitor.commlib.ByteBufferTransfer
 import com.wxson.homemonitor.monitor.R
 import com.wxson.homemonitor.monitor.mediacodec.IFirstByteBufferListener
 import com.wxson.homemonitor.monitor.mediacodec.IInputDataReadyListener
+import java.io.EOFException
 import java.io.IOException
 import java.io.ObjectInputStream
 import java.io.ObjectOutputStream
 import java.net.ConnectException
 import java.net.NoRouteToHostException
 import java.net.Socket
+import java.net.UnknownHostException
 
 
-class ClientThread(private val handler: Handler, context: Context) : Runnable {
+class ClientThread(private val handler: Handler, private val context: Context) : Runnable {
 
     private val TAG = this.javaClass.simpleName
     private val res = context.resources
@@ -42,9 +45,13 @@ class ClientThread(private val handler: Handler, context: Context) : Runnable {
 
     override fun run() {
         Log.i(TAG, "run")
-        sendLocalMsg("Disconnected")
+//        sendLocalMsg("Disconnected")
+        // get server ip address
+        val sharedPreferences = PreferenceManager.getDefaultSharedPreferences(context)
+        val serverIp = sharedPreferences.getString("server_ip", "")
         try{
-            socket = Socket(res.getString(R.string.server_ip_address), res.getInteger(R.integer.ServerSocketPort))
+//            socket = Socket(res.getString(R.string.server_ip_address), res.getInteger(R.integer.ServerSocketPort))
+            socket = Socket(serverIp, res.getInteger(R.integer.ServerSocketPort))
             sendLocalMsg("Connected")
             objectOutputStream = ObjectOutputStream(socket?.getOutputStream())
             objectInputStream = ObjectInputStream(socket?.getInputStream())
@@ -113,6 +120,10 @@ class ClientThread(private val handler: Handler, context: Context) : Runnable {
             // 启动Looper
             Looper.loop()
         }
+        catch (e: UnknownHostException){
+            Log.e(TAG, "未知IP地址！！")
+            sendLocalMsg("未知IP地址！！")
+        }
         catch(e: NoRouteToHostException){
             Log.e(TAG, "服务器连接失败！！")
             sendLocalMsg("服务器连接失败！！")
@@ -120,6 +131,10 @@ class ClientThread(private val handler: Handler, context: Context) : Runnable {
         catch (e: ConnectException){
             Log.e(TAG, "服务器未启动！！")
             sendLocalMsg("服务器未启动！！")
+        }
+        catch (e: EOFException){
+            Log.e(TAG, "EOFException")
+            sendLocalMsg("服务器关闭！！")
         }
         catch (re: RuntimeException){
             Log.e(TAG, "RuntimeException")
