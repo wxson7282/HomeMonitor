@@ -28,6 +28,6 @@
         android:layout_margin="16dp"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
-        app:srcCompat="?attr/actionBarDivider" />
+        app:srcCompat="@android:drawable/btn_default" />
 
 </androidx.constraintlayout.widget.ConstraintLayout>
