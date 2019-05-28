@@ -21,7 +21,7 @@ class MediaCodecCallback(val mime: String, val size: String, mainViewModel: Main
         }
 
         override fun onOutputBufferAvailable(mediaCodec: MediaCodec, index: Int, bufferInfo: MediaCodec.BufferInfo) {
-            Log.i(TAG, "onOutputBufferAvailable")
+//            Log.i(TAG, "onOutputBufferAvailable")
             //取得outputBuffer
             val outputBuffer = mediaCodec.getOutputBuffer(index)
             val byteBufferTransfer = ByteBufferTransfer()
@@ -40,7 +40,7 @@ class MediaCodecCallback(val mime: String, val size: String, mainViewModel: Main
             //设置byteBufferTransfer
             if (outputBuffer != null && isClientConnected) {
                 //启动帧数据传输
-                Log.i(TAG, "onOutputBufferAvailable  start to send byteBufferTransfer")
+//                Log.i(TAG, "onOutputBufferAvailable  start to send byteBufferTransfer")
                 //从outputBuffer中取出byte[]
                 val bytes = ByteArray(outputBuffer.remaining())
                 outputBuffer.get(bytes)
@@ -49,11 +49,9 @@ class MediaCodecCallback(val mime: String, val size: String, mainViewModel: Main
                 byteBufferTransfer.bufferInfoOffset = bufferInfo.offset
                 byteBufferTransfer.bufferInfoPresentationTimeUs = bufferInfo.presentationTimeUs
                 byteBufferTransfer.bufferInfoSize = bufferInfo.size
-
                 // send byteBufferTransfer to MainViewModel -> CameraIntentService
                 byteBufferListener.onByteBufferReady(byteBufferTransfer)
-
-                Log.i(TAG, "onOutputBufferAvailable finish to send byteBufferTransfer")
+//                Log.i(TAG, "onOutputBufferAvailable finish to send byteBufferTransfer")
             }
             mediaCodec.releaseOutputBuffer(index, false)
         }

@@ -1,19 +1,18 @@
 package com.wxson.homemonitor.camera.connect
 
-import android.annotation.SuppressLint
 import android.app.IntentService
 import android.content.Context
 import android.content.Intent
 import android.os.*
 import android.util.Log
-import com.wxson.homemonitor.camera.R
-import com.wxson.homemonitor.commlib.ByteBufferTransfer
 import com.wxson.homemonitor.commlib.LocalException
 import java.io.IOException
 import java.io.ObjectInputStream
 import java.io.ObjectOutputStream
+import java.lang.ref.WeakReference
 import java.net.ServerSocket
 import java.net.Socket
+
 
 private const val ACTION_TCP = "com.wxson.homemonitor.camera.connect.action.TCP"
 var IsTcpSocketServiceOn = false  //switch for TcpSocketService ON/OFF
@@ -24,7 +23,7 @@ private lateinit var StringTransferListener: IStringTransferListener
  */
 class CameraIntentService : IntentService("CameraIntentService") {
     private val TAG = "CameraIntentService"
-    var outputThread: ServerOutputThread? = null
+    var serverThread: ServerThread? = null
 
     override fun onHandleIntent(intent: Intent?) {
         when (intent?.action) {
@@ -40,9 +39,9 @@ class CameraIntentService : IntentService("CameraIntentService") {
     private fun handleActionTcp() {
         var clientSocket: Socket? = null
         var serverSocket: ServerSocket? = null
-        var tcpSocketServiceStatus: String
+        val tcpSocketServiceStatus: String
         try {
-            serverSocket = ServerSocket(resources.getInteger(R.integer.ServerSocketPort))
+            serverSocket = ServerSocket(resources.getInteger(com.wxson.homemonitor.camera.R.integer.ServerSocketPort))
             Log.i(TAG, "handleActionTcp: create ServerSocket")
             while (IsTcpSocketServiceOn){
                 Log.i(TAG, "handleActionTcp: while IsTcpSocketServiceOn")
@@ -50,9 +49,8 @@ class CameraIntentService : IntentService("CameraIntentService") {
                 clientSocket = serverSocket.accept()   //blocks until a connection is made
                 Log.i(TAG, "client IP address: " + clientSocket.inetAddress.hostAddress)
                 StringTransferListener.onMsgTransfer("TcpSocketClientStatus", "ON")
-                Thread(ServerInputThread(clientSocket)).start()     // Input thread
-                outputThread = ServerOutputThread(clientSocket)
-                Thread(outputThread).start()    // Output thread
+                serverThread = ServerThread(clientSocket)
+                Thread(serverThread).start()
             }
         } catch (e: IOException) {
             e.printStackTrace()
@@ -94,6 +92,11 @@ class CameraIntentService : IntentService("CameraIntentService") {
         return MyBinder()
     }
 
+    override fun onDestroy() {
+        serverThread?.handler?.removeCallbacksAndMessages(null)
+        super.onDestroy()
+    }
+
     private var localSocket: Socket? = null
     private var objectOutputStream: ObjectOutputStream? = null
     /**
@@ -119,31 +122,41 @@ class CameraIntentService : IntentService("CameraIntentService") {
         StringTransferListener = stringTransferListener
     }
 }
-
-class ServerInputThread(private var clientSocket: Socket) : Runnable {
-
+class ServerThread(private var clientSocket: Socket) : Runnable{
     private val TAG = this.javaClass.simpleName
-
-    // 该线程所处理的Socket所对应的输入流
     private val objectInputStream: ObjectInputStream = ObjectInputStream(clientSocket.getInputStream())
+    private val objectOutputStream: ObjectOutputStream = ObjectOutputStream(clientSocket.getOutputStream())
+    // 定义接收外部线程的消息的Handler对象
+    internal lateinit var handler: Handler
 
     override fun run() {
-        var inputObject = readObjectFromClient()
-        // 采用循环不断从Socket中读取客户端发送过来的数据
-        while (inputObject != null && IsTcpSocketServiceOn){
-            when (inputObject.javaClass.simpleName){
-                "byte[]" ->{
-                    Log.i(TAG, "byte[] class received")
-                    val arrivedString = String(inputObject as ByteArray)
-                    Log.i(TAG, "$arrivedString received")
-                    // triggers listener
-                    StringTransferListener.onStringArrived(arrivedString, clientSocket.inetAddress)
+        try {
+            Log.i(TAG, "ServerThread run")
+            // create Lopper for output
+            Looper.prepare()
+            handler = MyHandler(this, objectOutputStream)
+            Looper.loop()
+            // while loop for input
+            var inputObject = readObjectFromClient()
+            // 采用循环不断从Socket中读取客户端发送过来的数据
+            while (inputObject != null && IsTcpSocketServiceOn){
+                when (inputObject.javaClass.simpleName){
+                    "byte[]" ->{
+                        Log.i(TAG, "byte[] class received")
+                        val arrivedString = String(inputObject as ByteArray)
+                        Log.i(TAG, "$arrivedString received")
+                        // triggers listener
+                        StringTransferListener.onStringArrived(arrivedString, clientSocket.inetAddress)
+                    }
+                    else ->{
+                        Log.i(TAG, "other class received")
+                    }
                 }
-                else ->{
-                    Log.i(TAG, "other class received")
-                }
+                inputObject = readObjectFromClient()
             }
-            inputObject = readObjectFromClient()
+        }
+        catch (e: InterruptedException) {
+            Log.e(TAG, "InterruptedException")
         }
     }
 
@@ -159,54 +172,28 @@ class ServerInputThread(private var clientSocket: Socket) : Runnable {
         }
         return null
     }
-}
 
-/**
- * The thread for sending image data from MediaCodec.Buffer
- * Output timing is onOutputBufferAvailable
- */
-class ServerOutputThread(private var clientSocket: Socket) : Runnable {
-    private val TAG = this.javaClass.simpleName
-    private val objectOutputStream: ObjectOutputStream = ObjectOutputStream(clientSocket.getOutputStream())
-    // 定义接收外部线程的消息的Handler对象
-    var handler = Handler(Handler.Callback { false })
+    private class MyHandler(thread: ServerThread, private val objectOutputStream: ObjectOutputStream) : Handler() {
+        // WeakReference to the outer class's instance.
+        private val mOuter: WeakReference<ServerThread> = WeakReference(thread)
 
-    var frameCount: Long = 0
-
-    override fun run() {
-        while (true) {
-            try {
-                Looper.prepare()
-                handler = @SuppressLint("HandlerLeak") object : Handler(){
-                    override fun handleMessage(msg: Message) {
-                        // ByteBuffer data
-                        if (msg.what == 0x333){
-                            writeObjectToClient(msg.obj)
-//                            frameCount++
-//                            writeObjectToClient(frameCount.toString().toByteArray())
-//                            Log.e(TAG, "frameCount=$frameCount")
-                        }
-                    }
+        override fun handleMessage(msg: Message) {
+            val outer = mOuter.get()
+            if (outer != null) {
+                if (msg.what == 0x333) {
+                    writeObjectToClient(msg.obj)
+                    this.removeMessages(0x333)
                 }
-                Looper.loop()
             }
-            catch (e: InterruptedException) {
-                Log.e(TAG, "ServerOutputThread InterruptedException")
+        }
+
+        private fun writeObjectToClient(obj: Any) {
+            try {
+                objectOutputStream.writeObject(obj)
+            } catch (e: IOException) {
+                StringTransferListener.onMsgTransfer("TcpSocketClientStatus", "OFF")
             }
         }
     }
-
-    private fun writeObjectToClient(obj: Any){
-        try {
-            objectOutputStream.writeObject(obj)
-            val testObject: ByteBufferTransfer = obj as ByteBufferTransfer
-            Log.e(TAG, "writeObjectToClient ByteBufferTransfer time= ${testObject.bufferInfoPresentationTimeUs} size= ${testObject.bufferInfoSize}")
-        }
-        catch (e: IOException){
-            Log.i(TAG, "writeObjectToClient: socket is closed")
-            StringTransferListener.onMsgTransfer("TcpSocketClientStatus", "OFF")
-        }
-    }
-
 }
 
