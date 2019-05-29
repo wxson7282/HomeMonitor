@@ -25,7 +25,7 @@ class DecoderCallback {
             public void onInputDataReady(@NonNull byte[] inputData, @NonNull MediaCodec.BufferInfo bufferInfo) {
                 //如果输入数据没有处理完(mInputDataReady==true)，则丢弃新来的数据，没有缓冲区
                 if (!mInputDataReady){
-                    Log.i(TAG, "onInputDataReady get one frame");
+//                    Log.i(TAG, "onInputDataReady get one frame");
                     mInputDataReady = true;
                     mInputData = inputData;
                     mBufferInfo = bufferInfo;
@@ -41,11 +41,13 @@ class DecoderCallback {
         @Override
         public void onInputBufferAvailable(@NonNull MediaCodec mediaCodec, int inputBufferId) {
 //            Log.i(TAG, "onInputBufferAvailable");
+            int length = 0;
+            long timeStamp = 0;
             try {
                 ByteBuffer inputBuffer = mediaCodec.getInputBuffer(inputBufferId);
                 if (inputBuffer != null){
-                    int length = 0;
-                    long timeStamp = 0;
+//                    int length = 0;
+//                    long timeStamp = 0;
                     inputBuffer.clear();
                     if (mInputDataReady){
                         //如果输入数据准备好，注入解码器
@@ -55,18 +57,26 @@ class DecoderCallback {
                         mInputDataReady = false;
                         Log.i(TAG, "输入数据注入解码器 length=" + length + " timeStamp=" + timeStamp );
                     }
-                    //把inputBuffer放回队列
-                    mediaCodec.queueInputBuffer(inputBufferId,0, length, timeStamp,0);
+//                    //把inputBuffer放回队列
+//                    mediaCodec.queueInputBuffer(inputBufferId,0, length, timeStamp,0);
                 }
+            }
+            catch (IndexOutOfBoundsException e){
+                Log.e(TAG,"inputBuffer数据越界 IndexOutOfBoundsException");
             }
             catch (Exception e){
                 e.printStackTrace();
+                throw e;
+            }
+            finally {
+                //提交inputBuffer  放回队列
+                mediaCodec.queueInputBuffer(inputBufferId,0, length, timeStamp,0);
             }
         }
 
         @Override
         public void onOutputBufferAvailable(@NonNull MediaCodec mediaCodec, int outputBufferId, @NonNull MediaCodec.BufferInfo bufferInfo) {
-            Log.i(TAG, "onOutputBufferAvailable");
+//            Log.i(TAG, "onOutputBufferAvailable");
             mediaCodec.releaseOutputBuffer(outputBufferId, true);
         }
 

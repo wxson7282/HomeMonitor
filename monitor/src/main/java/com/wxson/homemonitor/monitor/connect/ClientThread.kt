@@ -65,9 +65,9 @@ class ClientThread(private val handler: Handler, private val context: Context) :
                         when (inputObject.javaClass.simpleName){
                             // ByteBufferTransfer is received
                             "ByteBufferTransfer" -> {
-                                Log.i(TAG, "接收到ByteBufferTransfer类")
+//                                Log.i(TAG, "接收到ByteBufferTransfer类")
                                 val byteBufferTransfer: ByteBufferTransfer = inputObject as ByteBufferTransfer
-                                Log.i(TAG, "byteBufferTransfer time=${byteBufferTransfer.bufferInfoPresentationTimeUs} size=${byteBufferTransfer.bufferInfoSize}")
+//                                Log.i(TAG, "byteBufferTransfer time=${byteBufferTransfer.bufferInfoPresentationTimeUs} size=${byteBufferTransfer.bufferInfoSize}")
                                 // 接收到首个byteBufferTransfer既第一帧视频
                                 if (firstByteBufferFlag == 1){
                                     firstByteBufferFlag++
@@ -77,7 +77,7 @@ class ClientThread(private val handler: Handler, private val context: Context) :
                                 //如果FirstByteBuffer已到 decode已经启动
                                 if (firstByteBufferFlag > 1){
                                     //把ByteBuffer传给Decode
-                                    Log.i(TAG, "把ByteBuffer传给MediaCodec")
+//                                    Log.i(TAG, "把ByteBuffer传给MediaCodec")
                                     val bufferInfo = MediaCodec.BufferInfo()
                                     bufferInfo.flags = byteBufferTransfer.bufferInfoFlags
                                     bufferInfo.offset = byteBufferTransfer.bufferInfoOffset

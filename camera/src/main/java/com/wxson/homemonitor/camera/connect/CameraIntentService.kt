@@ -9,7 +9,6 @@ import com.wxson.homemonitor.commlib.LocalException
 import java.io.IOException
 import java.io.ObjectInputStream
 import java.io.ObjectOutputStream
-import java.lang.ref.WeakReference
 import java.net.ServerSocket
 import java.net.Socket
 
@@ -134,7 +133,7 @@ class ServerThread(private var clientSocket: Socket) : Runnable{
             Log.i(TAG, "ServerThread run")
             // create Lopper for output
             Looper.prepare()
-            handler = MyHandler(this, objectOutputStream)
+            handler = MyHandler(objectOutputStream)
             Looper.loop()
             // while loop for input
             var inputObject = readObjectFromClient()
@@ -173,23 +172,18 @@ class ServerThread(private var clientSocket: Socket) : Runnable{
         return null
     }
 
-    private class MyHandler(thread: ServerThread, private val objectOutputStream: ObjectOutputStream) : Handler() {
-        // WeakReference to the outer class's instance.
-        private val mOuter: WeakReference<ServerThread> = WeakReference(thread)
-
+    private class MyHandler(private val objectOutputStream: ObjectOutputStream) : Handler() {
         override fun handleMessage(msg: Message) {
-            val outer = mOuter.get()
-            if (outer != null) {
-                if (msg.what == 0x333) {
-                    writeObjectToClient(msg.obj)
-                    this.removeMessages(0x333)
-                }
+            if (msg.what == 0x333) {
+                writeObjectToClient(msg.obj)
+                this.removeMessages(0x333)
             }
         }
 
         private fun writeObjectToClient(obj: Any) {
             try {
                 objectOutputStream.writeObject(obj)
+                objectOutputStream.reset()
             } catch (e: IOException) {
                 StringTransferListener.onMsgTransfer("TcpSocketClientStatus", "OFF")
             }

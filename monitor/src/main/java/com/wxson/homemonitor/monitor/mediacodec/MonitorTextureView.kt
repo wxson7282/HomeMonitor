@@ -37,7 +37,7 @@ class MonitorTextureView(private val mContext: Context, attrs: AttributeSet) : T
     }
 
     override fun onSurfaceTextureUpdated(surfaceTexture: SurfaceTexture) {
-        Log.i(TAG, "onSurfaceTextureUpdated...")
+//        Log.i(TAG, "onSurfaceTextureUpdated...")
     }
 
     //注册首帧数据监听器

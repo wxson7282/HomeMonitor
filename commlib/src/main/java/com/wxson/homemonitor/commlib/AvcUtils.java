@@ -138,7 +138,7 @@ public class AvcUtils {
 			}
 			else{
 				csd = null;
-                Log.i(TAG, "csd= null");
+//                Log.i(TAG, "csd= null");
 			}
 		}
 		return csd;
