@@ -76,6 +76,13 @@
 ![图5 客户端时序](https://github.com/wxson7282/HomeMonitor/blob/master/images/HomeMonitor_MonitorSequence.png)
 
 **客户端的技术要点**
+* **指定解码器输出** <br>
+取得显示View的surface，
+```kotlin
+val surface = Surface(super@MonitorTextureView.getSurfaceTexture())
+```
+设置解码器时，把surface作为参数传给mediaCodec.configure()方法即可。
+
 * **视频解码器参数** <br>
 >* mime(编码格式) 服务器发送过来的ByteBufferTransfer的实例中，包含此参数，不需单独设置。
 >* size(采样分辨率) 服务器发送过来的ByteBufferTransfer的实例中，包含此参数，不需单独设置。
