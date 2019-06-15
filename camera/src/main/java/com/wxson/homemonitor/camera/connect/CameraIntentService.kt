@@ -131,28 +131,33 @@ class ServerThread(private var clientSocket: Socket) : Runnable{
     override fun run() {
         try {
             Log.i(TAG, "ServerThread run")
+            // 启动一条子线程来读取客户响应的数据
+            object : Thread(){
+                override fun run() {
+                    // while loop for input
+                    var inputObject = readObjectFromClient()
+                    // 采用循环不断从Socket中读取客户端发送过来的数据
+                    while (inputObject != null && IsTcpSocketServiceOn){
+                        when (inputObject.javaClass.simpleName){
+                            "byte[]" ->{
+                                Log.i(TAG, "byte[] class received")
+                                val arrivedString = String(inputObject as ByteArray)
+                                Log.i(TAG, "$arrivedString received")
+                                // triggers listener
+                                StringTransferListener.onStringArrived(arrivedString, clientSocket.inetAddress)
+                            }
+                            else ->{
+                                Log.i(TAG, "other class received")
+                            }
+                        }
+                        inputObject = readObjectFromClient()
+                    }
+                }
+            }.start()
             // create Lopper for output
             Looper.prepare()
             handler = MyHandler(objectOutputStream)
             Looper.loop()
-            // while loop for input
-            var inputObject = readObjectFromClient()
-            // 采用循环不断从Socket中读取客户端发送过来的数据
-            while (inputObject != null && IsTcpSocketServiceOn){
-                when (inputObject.javaClass.simpleName){
-                    "byte[]" ->{
-                        Log.i(TAG, "byte[] class received")
-                        val arrivedString = String(inputObject as ByteArray)
-                        Log.i(TAG, "$arrivedString received")
-                        // triggers listener
-                        StringTransferListener.onStringArrived(arrivedString, clientSocket.inetAddress)
-                    }
-                    else ->{
-                        Log.i(TAG, "other class received")
-                    }
-                }
-                inputObject = readObjectFromClient()
-            }
         }
         catch (e: InterruptedException) {
             Log.e(TAG, "InterruptedException")

@@ -113,6 +113,7 @@ class ClientThread(private val handler: Handler, private val context: Context) :
                     if (msg.what == 0x345){
                         // 将用户的文字信息写入网络
                         objectOutputStream?.writeObject((msg.obj.toString()).toByteArray())
+                        objectOutputStream?.reset()
                         Log.i(TAG, "handleMessage " + msg.obj.toString())
                     }
                 }
