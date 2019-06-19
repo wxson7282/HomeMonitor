@@ -289,8 +289,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     val msg = Message()
                     msg.what = 0x333
                     msg.obj = byteBufferTransfer
-//                    cameraIntentService!!.outputThread?.handler?.sendMessage(msg)
-                    cameraIntentService!!.serverThread?.handler?.sendMessage(msg)
+                    cameraIntentService?.serverThread?.handler?.sendMessage(msg)
                 }
             })
             //取得预设的分辨率
