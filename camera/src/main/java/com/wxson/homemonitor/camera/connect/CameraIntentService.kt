@@ -126,7 +126,7 @@ class ServerThread(private var clientSocket: Socket) : Runnable{
     private val objectInputStream: ObjectInputStream = ObjectInputStream(clientSocket.getInputStream())
     private val objectOutputStream: ObjectOutputStream = ObjectOutputStream(clientSocket.getOutputStream())
     // 定义接收外部线程的消息的Handler对象
-    internal lateinit var handler: Handler
+    internal var handler: Handler? = null
 
     override fun run() {
         try {
