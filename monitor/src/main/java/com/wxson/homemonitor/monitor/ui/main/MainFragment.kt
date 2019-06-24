@@ -6,6 +6,7 @@ import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.widget.ImageView
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.Observer
 import androidx.lifecycle.ViewModelProviders
 import com.google.android.material.snackbar.Snackbar
@@ -23,12 +24,12 @@ class MainFragment : androidx.fragment.app.Fragment() {
     private lateinit var viewModel: MainViewModel
     private lateinit var imageConnectStatus: ImageView
     private var isConnected = false
+    private var isTransmitOn = true
 
     override fun onCreateView(
         inflater: LayoutInflater, container: ViewGroup?,
         savedInstanceState: Bundle?
     ): View {
-        //        imageConnectStatus = activity!!.findViewById(R.id.imageConnected)
         return inflater.inflate(R.layout.main_fragment, container, false)
     }
 
@@ -38,29 +39,34 @@ class MainFragment : androidx.fragment.app.Fragment() {
         imageConnectStatus = activity!!.findViewById(R.id.imageConnected)
         viewModel = ViewModelProviders.of(this).get(MainViewModel::class.java)
 
-        //定义浮动按钮
-        fab.setOnClickListener{
+        fab_capture.hide()
+        fab_transmit.hide()
+        //定义拍照浮动按钮
+        fab_capture.setOnClickListener{
                 view ->
             if (isConnected){
 
                 Snackbar.make(view, "服务器端拍照", Snackbar.LENGTH_SHORT).show()
                 viewModel.sendMsgToServer("Capture Still Picture")
-
-//                if (viewModel.transferStatus == MainViewModel.TransferStatus.OFF)
-//                    Snackbar.make(view, "开始传送", Snackbar.LENGTH_LONG)
-//                        .setAction("确定", View.OnClickListener{
-//                            viewModel.sendMsgToServer("Start Video Transfer")
-//                            viewModel.transferStatus = MainViewModel.TransferStatus.ON
-//                        }).show()
-//                else
-//                    Snackbar.make(view, "停止传送", Snackbar.LENGTH_LONG)
-//                        .setAction("确定", View.OnClickListener{
-//                            viewModel.sendMsgToServer("Stop Video Transfer")
-//                            viewModel.transferStatus = MainViewModel.TransferStatus.OFF
-//                        }).show()
             }
             else {
                 showMsg("服务器未连接")
+            }
+        }
+        //定义视频传送浮动按钮
+        fab_transmit.setOnClickListener{
+            view ->
+            if (isTransmitOn){
+                viewModel.sendMsgToServer("Stop Video Transmit")    // notify server to stop video transmit
+                Snackbar.make(view, "暂停视频传送", Snackbar.LENGTH_SHORT).show()
+                fab_transmit.backgroundTintList = ContextCompat.getColorStateList(this.activity!!.baseContext, R.color.button_light)
+                isTransmitOn = false
+            }
+            else{
+                viewModel.sendMsgToServer("Start Video Transmit")    // notify server to start video transmit
+                Snackbar.make(view, "开始视频传送", Snackbar.LENGTH_SHORT).show()
+                fab_transmit.backgroundTintList = ContextCompat.getColorStateList(this.activity!!.baseContext, R.color.colorAccent)
+                isTransmitOn = true
             }
         }
 
@@ -73,7 +79,7 @@ class MainFragment : androidx.fragment.app.Fragment() {
     }
 
     private fun showMsg(msg: String){
-        Snackbar.make(fab, msg, Snackbar.LENGTH_LONG).show()
+        Snackbar.make(fab_capture, msg, Snackbar.LENGTH_LONG).show()
     }
 
     private fun localMsgHandler(localMsg: String){
@@ -81,10 +87,14 @@ class MainFragment : androidx.fragment.app.Fragment() {
             "Connected" -> {
                 imageConnectStatus.setImageDrawable(resources.getDrawable(R.drawable.ic_connected, null))
                 isConnected = true
+                fab_capture.show()
+                fab_transmit.show()
             }
             "Disconnected" -> {
                 imageConnectStatus.setImageDrawable(resources.getDrawable(R.drawable.ic_disconnected, null))
                 isConnected = false
+                fab_capture.hide()
+                fab_transmit.hide()
             }
             else -> showMsg(localMsg)
         }

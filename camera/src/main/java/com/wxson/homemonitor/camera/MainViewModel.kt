@@ -41,6 +41,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val TAG = this.javaClass.simpleName
     private val app = application
     private lateinit var connectStatusListener: IConnectStatusListener
+    private lateinit var transmitInstructionListener: ITransmitInstructionListener
 //    private val byteBufferTransfer: ByteBufferTransfer
 //    private var videoCodecMime: String?                    //视频编码格式
 //    private var videoCodecSize: String?                    //视频编码分辨率
@@ -116,6 +117,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun setConnectStatusListener(connectStatusListener: IConnectStatusListener) {
         this.connectStatusListener = connectStatusListener
+    }
+
+    fun setTransmitInstructionListener(transmitInstructionListener: ITransmitInstructionListener){
+        this.transmitInstructionListener = transmitInstructionListener
     }
 
     /**
@@ -489,10 +494,18 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         override fun onStringArrived(arrivedString: String, clientInetAddress: InetAddress) {
             Log.i(TAG, "onStringArrived")
             localMsgLiveData.postValue("arrivedString:$arrivedString clientInetAddress:$clientInetAddress")
-            // Take a photo on command of client
-            if (arrivedString == "Capture Still Picture") {
-                // to do in main thread
-                Handler(Looper.getMainLooper()).post { captureStillPicture() }
+            when (arrivedString){
+                "Capture Still Picture" ->{
+                    // Take a photo on command of client
+                    // to do in main thread
+                    Handler(Looper.getMainLooper()).post { captureStillPicture() }
+                }
+                "Stop Video Transmit" ->{
+                    transmitInstructionListener.onTransmitInstructionArrived(false)
+                }
+                "Start Video Transmit" ->{
+                    transmitInstructionListener.onTransmitInstructionArrived(true)
+                }
             }
         }
 

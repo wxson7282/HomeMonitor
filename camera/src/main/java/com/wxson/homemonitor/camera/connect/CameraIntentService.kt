@@ -188,7 +188,7 @@ class ServerThread(private var clientSocket: Socket) : Runnable{
         private fun writeObjectToClient(obj: Any) {
             try {
                 objectOutputStream.writeObject(obj)
-                objectOutputStream.reset()
+                objectOutputStream.reset()  // It is necessary to avoid OOM.
             } catch (e: IOException) {
                 StringTransferListener.onMsgTransfer("TcpSocketClientStatus", "OFF")
             }

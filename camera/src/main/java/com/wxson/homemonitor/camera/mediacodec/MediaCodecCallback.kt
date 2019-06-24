@@ -7,10 +7,12 @@ import com.wxson.homemonitor.camera.MainViewModel
 import com.wxson.homemonitor.commlib.AvcUtils.GetCsd
 import com.wxson.homemonitor.commlib.ByteBufferTransfer
 import com.wxson.homemonitor.commlib.IConnectStatusListener
+import com.wxson.homemonitor.commlib.ITransmitInstructionListener
 
 class MediaCodecCallback(val mime: String, val size: String, mainViewModel: MainViewModel) {
     private val TAG = this.javaClass.simpleName
     private var isClientConnected = false
+    private var isTransmitOn = true
     //to inform MainViewModel of being onOutputBufferAvailable in MediaCodecCallback
     private lateinit var byteBufferListener: IByteBufferListener
     private var firstFrameCsd: ByteArray? = null
@@ -38,7 +40,7 @@ class MediaCodecCallback(val mime: String, val size: String, mainViewModel: Main
             }
 
             //设置byteBufferTransfer
-            if (outputBuffer != null && isClientConnected) {
+            if (outputBuffer != null && isClientConnected && isTransmitOn) {
                 //启动帧数据传输
 //                Log.i(TAG, "onOutputBufferAvailable  start to send byteBufferTransfer")
                 //从outputBuffer中取出byte[]
@@ -76,6 +78,13 @@ class MediaCodecCallback(val mime: String, val size: String, mainViewModel: Main
             }
         }
         mainViewModel.setConnectStatusListener(connectStatusListener)
+        //视频传送指令监听器
+        val transmitInstructionListener = object : ITransmitInstructionListener{
+            override fun onTransmitInstructionArrived(transmitOn: Boolean) {
+                isTransmitOn = transmitOn
+            }
+        }
+        mainViewModel.setTransmitInstructionListener(transmitInstructionListener)
     }
 
     fun getCallback(): MediaCodec.Callback {
