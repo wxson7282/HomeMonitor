@@ -8,6 +8,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.LiveData
 import androidx.lifecycle.MutableLiveData
 import com.wxson.homemonitor.monitor.connect.ClientThread
+import com.wxson.homemonitor.monitor.connect.HeartBeatThread
 import java.lang.ref.WeakReference
 
 
@@ -17,9 +18,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application){
 
     private val app = getApplication<Application>()
     private val myUncheckedExceptionHandler = MyUncheckedExceptionHandler()
-
-    enum class TransferStatus{OFF, ON}
-    var transferStatus = TransferStatus.OFF
 
     private var serverMsg = MutableLiveData<Any>()
     fun getServerMsg(): LiveData<Any> {
@@ -51,6 +49,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application){
         }
     }
 
+    private var heartBeatThread: HeartBeatThread
+
     private val uncaughtExceptionListener = object : MyUncheckedExceptionHandler.IUncaughtExceptionListener{
         override fun onUnUncaughtException(exceptionName: String) {
             //如果从子线程收到EOFException，表明服务器已经关闭
@@ -67,6 +67,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application){
         handler = MyHandler(WeakReference(this))
         clientThread = ClientThread(handler, app)
         Thread(clientThread).start()
+        heartBeatThread = HeartBeatThread(app, clientThread)
     }
 
     fun sendMsgToServer(msgText: String){
@@ -82,5 +83,19 @@ class MainViewModel(application: Application) : AndroidViewModel(application){
         clientThread.socket?.close()
         clientThread.socket = null
         super.onCleared()
+    }
+
+    fun setHeartBeat(enabled: Boolean){
+        if (enabled){
+            // to start heartBeatThread
+            Log.i(TAG, "Heart Beat start")
+            heartBeatThread.isHeartBeatOn = true
+            Thread(heartBeatThread).start()
+        }
+        else{
+            // to stop heartBeatThread
+            Log.i(TAG, "Heart Beat stop")
+            heartBeatThread.isHeartBeatOn = false
+        }
     }
 }

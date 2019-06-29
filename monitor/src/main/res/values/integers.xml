@@ -2,4 +2,5 @@
 <resources>
     <integer name="ServerSocketPort">13776</integer>
     <integer name="LocalServerSocketPort">30000</integer>
+    <integer name="HeartBeatInterval">30</integer>
 </resources>

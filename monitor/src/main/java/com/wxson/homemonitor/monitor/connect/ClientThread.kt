@@ -159,7 +159,7 @@ class ClientThread(private val handler: Handler, private val context: Context) :
         }
     }
 
-    private fun sendLocalMsg(localMsg: String){
+    fun sendLocalMsg(localMsg: String){
         val msg = Message()
         msg.what = 0x124
         msg.obj = localMsg

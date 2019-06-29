@@ -61,12 +61,14 @@ class MainFragment : androidx.fragment.app.Fragment() {
                 Snackbar.make(view, "暂停视频传送", Snackbar.LENGTH_SHORT).show()
                 fab_transmit.backgroundTintList = ContextCompat.getColorStateList(this.activity!!.baseContext, R.color.button_light)
                 isTransmitOn = false
+                viewModel.setHeartBeat(true)
             }
             else{
                 viewModel.sendMsgToServer("Start Video Transmit")    // notify server to start video transmit
                 Snackbar.make(view, "开始视频传送", Snackbar.LENGTH_SHORT).show()
                 fab_transmit.backgroundTintList = ContextCompat.getColorStateList(this.activity!!.baseContext, R.color.colorAccent)
                 isTransmitOn = true
+                viewModel.setHeartBeat(false)
             }
         }
 
