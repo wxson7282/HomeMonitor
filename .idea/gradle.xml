@@ -11,6 +11,10 @@
             <option value="$PROJECT_DIR$/camera" />
             <option value="$PROJECT_DIR$/commlib" />
             <option value="$PROJECT_DIR$/monitor" />
+            <option value="$PROJECT_DIR$/openCv_15puzzle" />
+            <option value="$PROJECT_DIR$/openCv_CameraCalibration" />
+            <option value="$PROJECT_DIR$/openCv_ImageManipulations" />
+            <option value="$PROJECT_DIR$/opencv" />
           </set>
         </option>
         <option name="resolveModulePerSourceSet" value="false" />
