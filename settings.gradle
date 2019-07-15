@@ -1,2 +1,2 @@
-include ':camera', ':monitor', ':commlib', ':openCv_ImageManipulations', ':openCv_15puzzle', ':openCv_CameraCalibration'
+include ':camera', ':monitor', ':commlib', ':openCv_ImageManipulations', ':openCv_15puzzle', ':openCv_CameraCalibration', ':openCv_ColorBlobDetection'
 include ':opencv'
