@@ -90,7 +90,7 @@ class MainActivity : AppCompatActivity(), EasyPermissions.PermissionCallbacks {
     }
 
     private fun setPreviewSize(previewSize: Size){
-        // 根据选中的预览尺寸来调整预览组件（TextureView的）的长宽比
+        // 根据相机的分辨率来调整预览组件（TextureView的）的长宽比
             if (this.resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE) {
                 textureView.setAspectRatio(previewSize.width, previewSize.height)
             } else {

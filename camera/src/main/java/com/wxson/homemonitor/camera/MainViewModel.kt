@@ -245,7 +245,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     }
                 }, null
             )
-            // 获取最佳的预览尺寸 通知MainActivity根据选中的预览尺寸来调整预览组件（TextureView的）的长宽比
+            // 根据相机的分辨率，获取最佳的预览尺寸 通知MainActivity根据选中的预览尺寸来调整预览组件（TextureView的）的长宽比
             previewSizeLiveData.postValue(chooseOptimalSize(map.getOutputSizes(SurfaceTexture::class.java), width, height, largest))
         } catch (e: CameraAccessException) {
             e.printStackTrace()
@@ -255,6 +255,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     }
 
+    /**
+     * Target1 : previewSurface
+     * Target2 : openCvSurface
+     */
     private fun createCameraPreviewSession() {
         Log.i(TAG, "createCameraPreviewSession")
         try {
