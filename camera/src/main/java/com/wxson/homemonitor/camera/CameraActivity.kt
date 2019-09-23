@@ -5,6 +5,7 @@ import android.content.Intent
 import android.content.res.Configuration
 import android.os.Bundle
 import android.util.Log
+import android.util.Size
 import android.view.Menu
 import android.view.MenuItem
 import android.widget.ImageView
@@ -12,9 +13,9 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.Observer
 import androidx.lifecycle.ViewModelProviders
 import com.google.android.material.snackbar.Snackbar
+import com.wxson.homemonitor.commlib.AutoFitTextureView
 import kotlinx.android.synthetic.main.activity_main.*
 import org.opencv.android.BaseLoaderCallback
-import org.opencv.android.CameraBridgeViewBase
 import org.opencv.android.LoaderCallbackInterface
 import org.opencv.android.OpenCVLoader
 import pub.devrel.easypermissions.EasyPermissions
@@ -25,7 +26,7 @@ class CameraActivity : AppCompatActivity(), EasyPermissions.PermissionCallbacks 
     private val TAG = this.javaClass.simpleName
 
     private lateinit var viewModel: CameraViewModel
-    private lateinit var surfaceView: CameraBridgeViewBase
+    private lateinit var textureView: AutoFitTextureView
     private lateinit var imageConnectStatus: ImageView
     //requestCode
     private val REQUEST_CAMERA_PERMISSION = 1
@@ -35,7 +36,7 @@ class CameraActivity : AppCompatActivity(), EasyPermissions.PermissionCallbacks 
             when (status) {
                 LoaderCallbackInterface.SUCCESS -> {
                     Log.i(TAG, "OpenCV loaded successfully")
-                    surfaceView.enableView()
+//                    surfaceView.enableView()
                 }
                 else -> {
                     super.onManagerConnected(status)
@@ -47,15 +48,16 @@ class CameraActivity : AppCompatActivity(), EasyPermissions.PermissionCallbacks 
     override fun onCreate(savedInstanceState: Bundle?) {
         Log.i(TAG, "onCreate")
         super.onCreate(savedInstanceState)
-        setContentView(R.layout.camera_main)
+        setContentView(R.layout.activity_main)
         setSupportActionBar(toolbar)
 
         imageConnectStatus = findViewById(R.id.imageConnected)
 
         viewModel = ViewModelProviders.of(this).get(CameraViewModel::class.java)
-        surfaceView = findViewById(R.id.surface_view)
-        surfaceView.visibility = CameraBridgeViewBase.VISIBLE
-        surfaceView.setCvCameraViewListener(viewModel)
+        textureView = findViewById(R.id.textureView)
+        textureView.surfaceTextureListener = viewModel.surfaceTextureListener
+
+        viewModel.textureView = this.textureView
         viewModel.rotation = this.windowManager.defaultDisplay.rotation
 
         // registers observer for information from viewModel
@@ -73,11 +75,6 @@ class CameraActivity : AppCompatActivity(), EasyPermissions.PermissionCallbacks 
 
     }
 
-    override fun onPause() {
-        super.onPause()
-        surfaceView.disableView()
-    }
-
     override fun onResume() {
         super.onResume()
         if (!OpenCVLoader.initDebug()) {
@@ -87,11 +84,6 @@ class CameraActivity : AppCompatActivity(), EasyPermissions.PermissionCallbacks 
             Log.d(TAG, "OpenCV library found inside package. Using it!")
             loaderCallback.onManagerConnected(LoaderCallbackInterface.SUCCESS)
         }
-    }
-
-    override fun onDestroy() {
-        super.onDestroy()
-        surfaceView.disableView()
     }
 
     override fun onCreateOptionsMenu(menu: Menu): Boolean {
@@ -124,7 +116,16 @@ class CameraActivity : AppCompatActivity(), EasyPermissions.PermissionCallbacks 
     }
 
     private fun showMsg(msg: String){
-        Snackbar.make(surfaceView, msg, Snackbar.LENGTH_LONG).show()
+        Snackbar.make(textureView, msg, Snackbar.LENGTH_LONG).show()
+    }
+
+    private fun setPreviewSize(previewSize: Size){
+        // 根据相机的分辨率来调整预览组件（TextureView的）的长宽比
+        if (this.resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE) {
+            textureView.setAspectRatio(previewSize.width, previewSize.height)
+        } else {
+            textureView.setAspectRatio(previewSize.height, previewSize.width)
+        }
     }
 
     private fun requestCameraPermission() {
@@ -182,4 +183,5 @@ class CameraActivity : AppCompatActivity(), EasyPermissions.PermissionCallbacks 
             imageConnectStatus.setImageDrawable(getDrawable(R.drawable.ic_disconnected))
         }
     }
+
 }

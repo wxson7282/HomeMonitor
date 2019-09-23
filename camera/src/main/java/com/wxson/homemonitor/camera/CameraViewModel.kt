@@ -7,6 +7,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.ServiceConnection
 import android.graphics.ImageFormat
+import android.graphics.Rect
 import android.graphics.SurfaceTexture
 import android.hardware.camera2.*
 import android.media.ImageReader
@@ -30,10 +31,9 @@ import com.wxson.homemonitor.camera.connect.IStringTransferListener
 import com.wxson.homemonitor.camera.connect.IsTcpSocketServiceOn
 import com.wxson.homemonitor.camera.mediacodec.CodecCallback
 import com.wxson.homemonitor.camera.mediacodec.IByteBufferListener
+import com.wxson.homemonitor.camera.openCv.ImageAvailableListener
+import com.wxson.homemonitor.camera.preview.PreviewThread
 import com.wxson.homemonitor.commlib.*
-import org.opencv.android.CameraBridgeViewBase
-import org.opencv.core.Core
-import org.opencv.core.CvType
 import org.opencv.core.Mat
 import java.io.File
 import java.io.FileOutputStream
@@ -41,7 +41,7 @@ import java.net.InetAddress
 import java.text.SimpleDateFormat
 import java.util.*
 
-class CameraViewModel(application: Application) : AndroidViewModel(application), CameraBridgeViewBase.CvCameraViewListener2 {
+class CameraViewModel(application: Application) : AndroidViewModel(application){
     private val TAG = this.javaClass.simpleName
     private val app = application
     private lateinit var connectStatusListener: IConnectStatusListener
@@ -72,13 +72,13 @@ class CameraViewModel(application: Application) : AndroidViewModel(application),
 
     //连接状态
     private var isClientConnectedLiveData = MutableLiveData<Boolean>()
-    fun getClientConnected(): LiveData<Boolean>{
+    fun getClientConnected(): LiveData<Boolean> {
         return isClientConnectedLiveData
     }
 
     //surfaceTexture
     private var surfaceTextureStatusLiveData = MutableLiveData<String>()
-    fun getSurfaceTextureStatus(): LiveData<String>{
+    fun getSurfaceTextureStatus(): LiveData<String> {
         return surfaceTextureStatusLiveData
     }
 
@@ -86,14 +86,6 @@ class CameraViewModel(application: Application) : AndroidViewModel(application),
 
     init {
         Log.i(TAG, "init")
-//        //首次运行时设置默认值
-//        PreferenceManager.setDefaultValues(app, R.xml.pref_codec, false)
-//        val sharedPreferences = PreferenceManager.getDefaultSharedPreferences(app)
-//        //取得预设的编码格式
-//        videoCodecMime = sharedPreferences.getString("mime_list", "")
-//        //取得预设的分辨率
-//        videoCodecSize = sharedPreferences.getString("size_list", "")
-
         bindService()
     }
 
@@ -115,31 +107,41 @@ class CameraViewModel(application: Application) : AndroidViewModel(application),
         }
         app.unbindService(serviceConnection)
         cameraIntentService = null
+
+        previewThread.revHandler.removeCallbacksAndMessages(null)
+
         super.onCleared()
     }
 
     //region for camera
     private lateinit var previewRequestBuilder: CaptureRequest.Builder
-//    private lateinit var cameraDevice: CameraDevice
+    //    private lateinit var cameraDevice: CameraDevice
     lateinit var mediaCodec: MediaCodec            //编解码器
-    private var cameraWidth: Int = 0
-    private var cameraHigh: Int = 0
+    private var previewSurfaceWidth: Int = 0
+    private var previewSurfaceHigh: Int = 0
     // 摄像头ID（通常0代表后置摄像头，1代表前置摄像头）
     private val cameraId = "0"
     private var cameraDevice: CameraDevice? = null
     private lateinit var imageReader: ImageReader
     private lateinit var captureSession: CameraCaptureSession
     private lateinit var previewRequest: CaptureRequest
-    private var surfaceTexture: SurfaceTexture? = null
+//    private var surfaceTexture: SurfaceTexture? = null
     var rotation = Surface.ROTATION_0   // 显示设备方向
+    private val openCvFormat = ImageFormat.YUV_420_888
+    private lateinit var openCvImageReader: ImageReader
+    private var backgroundMat: Mat? = null
+
+    lateinit var textureView: TextureView
+    private lateinit var previewThread: PreviewThread
+    private var imageSize = Size(-1, -1)
+    private var previewScale: Float = 1F
+    lateinit var viewRect: Rect
 
     private val stateCallback = object : CameraDevice.StateCallback() {
         //  摄像头被打开时激发该方法
         override fun onOpened(device: CameraDevice) {
             Log.i(TAG, "onOpened")
             cameraDevice = device
-//            //WifiP2pConnectStatus监听器取得连接状态
-//            setWifiP2pConnectStatus()
             // 开始预览
             createCameraPreviewSession()
         }
@@ -160,7 +162,9 @@ class CameraViewModel(application: Application) : AndroidViewModel(application),
 
     fun openCamera() {
         Log.i(TAG, "openCamera")
-        setUpCameraOutputs(cameraWidth, cameraHigh)
+        previewThread = PreviewThread(textureView)
+        setUpCameraOutputs(previewSurfaceWidth, previewSurfaceHigh)
+
         val manager = app.getSystemService(Context.CAMERA_SERVICE) as CameraManager
         try {
             // 打开摄像头
@@ -172,17 +176,21 @@ class CameraViewModel(application: Application) : AndroidViewModel(application),
         } catch (e: NullPointerException) {
             e.printStackTrace()
         }
+            // to start previewThread
+            Thread(previewThread).start()
+
     }
 
     fun closeCamera() {
         Log.i(TAG, "closeCamera")
-//        mediaCodec.stop()
-//        mediaCodec.release()
+        captureSession.close()
         cameraDevice?.close()
         cameraDevice = null
+        imageReader.close()
+        openCvImageReader.close()
     }
 
-    private fun setUpCameraOutputs(width: Int, height: Int) {
+    private fun setUpCameraOutputs(surfaceWidth: Int, surfaceHeight: Int) {
         Log.i(TAG, "setUpCameraOutputs")
         val manager = app.getSystemService(Context.CAMERA_SERVICE) as CameraManager
         try {
@@ -195,7 +203,7 @@ class CameraViewModel(application: Application) : AndroidViewModel(application),
 
             // 获取摄像头支持的最大尺寸
             val largest = Collections.max(
-                Arrays.asList(*map!!.getOutputSizes(ImageFormat.JPEG)),
+                listOf(*map!!.getOutputSizes(ImageFormat.JPEG)),
                 CompareSizesByArea()
             )
             // 创建一个ImageReader对象，用于获取摄像头的图像数据
@@ -227,8 +235,13 @@ class CameraViewModel(application: Application) : AndroidViewModel(application),
                     }
                 }, null
             )
-//            // 获取最佳的预览尺寸 通知MainActivity根据选中的预览尺寸来调整预览组件（TextureView的）的长宽比
-//            previewSizeLiveData.postValue(chooseOptimalSize(map.getOutputSizes(SurfaceTexture::class.java), width, height, largest))
+//            // 根据相机的分辨率，获取最佳的预览尺寸 通知MainActivity根据选中的预览尺寸来调整预览组件（TextureView的）的长宽比
+//            previewSizeLiveData.postValue(chooseOptimalSize(map.getOutputSizes(SurfaceTexture::class.java), surfaceWidth, surfaceHeight, largest))
+            if (!calcPreviewSize(surfaceHeight, surfaceWidth)){
+                localMsgLiveData.postValue("PreviewSize = bestSize")
+            }
+
+
         } catch (e: CameraAccessException) {
             e.printStackTrace()
         } catch (e: NullPointerException) {
@@ -237,21 +250,36 @@ class CameraViewModel(application: Application) : AndroidViewModel(application),
 
     }
 
+    /**
+     * Target1 : openCvSurface
+     * Target2 : encoderInputSurface
+     * Target3 : imageReader.surface
+     */
     private fun createCameraPreviewSession() {
         Log.i(TAG, "createCameraPreviewSession")
         try {
             if (cameraDevice == null){
                 return
             }
-//            surfaceTexture?.setDefaultBufferSize(previewSizeLiveData.value!!.width, previewSizeLiveData.value!!.height)
+//            val previewWidth = previewSizeLiveData.value!!.width
+//            val previewHeight = previewSizeLiveData.value!!.height
+            val imageWidth = imageSize.width
+            val imageHeight = imageSize.height
+//            surfaceTexture?.setDefaultBufferSize(previewWidth, previewHeight)
 
-            // Set up Surface for the camera preview
-            val previewSurface = Surface(surfaceTexture)
+//            // Set up Surface for the camera preview
+//            val previewSurface = Surface(surfaceTexture)
+            // Set up openCvImageReader
+            openCvImageReader = ImageReader.newInstance(imageWidth, imageHeight, openCvFormat, 3)
+            openCvImageReader.setOnImageAvailableListener(ImageAvailableListener(openCvFormat, imageWidth, imageHeight, backgroundMat, previewThread), null)
+            val openCvSurface = openCvImageReader.surface
 
             // 创建作为预览的CaptureRequest.Builder
             previewRequestBuilder = cameraDevice!!.createCaptureRequest(CameraDevice.TEMPLATE_PREVIEW)
-            // 将textureView的surface作为CaptureRequest.Builder的目标
-            previewRequestBuilder.addTarget(Surface(surfaceTexture))
+//            // 将textureView的surface作为CaptureRequest.Builder的目标
+//            previewRequestBuilder.addTarget(previewSurface)
+            // 将openCvImageReader的surface作为CaptureRequest.Builder的目标
+            previewRequestBuilder.addTarget(openCvSurface)
 
             //region added by wan
             //首次运行时设置默认值
@@ -298,9 +326,9 @@ class CameraViewModel(application: Application) : AndroidViewModel(application),
             mediaCodec.start()
             previewRequestBuilder.addTarget(encoderInputSurface)
 
-            // 创建CameraCaptureSession，该对象负责管理处理预览请求和拍照请求，以及传输请求
+            // 创建CameraCaptureSession，该对象负责管理处理预览请求和拍照请求，以及传输请求。最多只能容纳3个surface!
             cameraDevice!!.createCaptureSession(
-                Arrays.asList(previewSurface, encoderInputSurface, imageReader.getSurface()), object :
+                listOf(openCvSurface, encoderInputSurface, imageReader.surface), object :
                     CameraCaptureSession.StateCallback() {
                     override fun onConfigured(cameraCaptureSession: CameraCaptureSession) {
                         Log.i(TAG, "onConfigured")
@@ -418,27 +446,6 @@ class CameraViewModel(application: Application) : AndroidViewModel(application),
         }
     }
 
-    private fun chooseOptimalSize(choices: Array<Size>, width: Int, height: Int, aspectRatio: Size): Size {
-        // 收集摄像头支持的打过预览Surface的分辨率
-        val bigEnough = ArrayList<Size>()
-        val w = aspectRatio.width
-        val h = aspectRatio.height
-        for (option in choices) {
-            if (option.height == option.width * h / w &&
-                option.width >= width && option.height >= height
-            ) {
-                bigEnough.add(option)
-            }
-        }
-        // 如果找到多个预览尺寸，获取其中面积最小的。
-        if (bigEnough.size > 0) {
-            return Collections.min(bigEnough, CompareSizesByArea())
-        } else {
-            println("找不到合适的预览尺寸！！！")
-            return choices[0]
-        }
-    }
-
     val surfaceTextureListener = object : TextureView.SurfaceTextureListener{
         override fun onSurfaceTextureSizeChanged(surface: SurfaceTexture?, width: Int, height: Int) {
             Log.i(TAG, "onSurfaceTextureSizeChanged")
@@ -456,13 +463,81 @@ class CameraViewModel(application: Application) : AndroidViewModel(application),
 
         override fun onSurfaceTextureAvailable(surface: SurfaceTexture?, width: Int, height: Int) {
             Log.i(TAG, "onSurfaceTextureAvailable")
-            surfaceTexture = surface
-            cameraWidth = width
-            cameraHigh = height
+//            surfaceTexture = surface
+            previewSurfaceWidth = width
+            previewSurfaceHigh = height
+
+//            // to start previewThread
+//            previewThread = PreviewThread(textureView)
+//            Thread(previewThread).start()
+
             // notify MainActivity to requestCameraPermission
             surfaceTextureStatusLiveData.postValue("onSurfaceTextureAvailable")
         }
     }
+
+    /**
+     * 根据view的物理尺寸，参照相机支持的分辨率，使用最接近的长宽比，确定预览画面的尺寸
+     * 循环测试相机支持的分辨率
+     * 同时计算预览时图像放大比例
+     * 测试条件：最佳宽度 = 0
+     *           最佳高度 = 0
+     *           如果view的宽度>= 相机分辨率宽度 且 view的高度 >= 相机分辨率高度  且
+     *               最佳宽度  <= 相机分辨率宽度 且 最佳高度   <= 相机分辨率高度  且
+     *               view的长宽比与相机分辨率长宽比之差 < 0.1
+     *           则  最佳宽度 = 相机分辨率宽度
+     *               最佳高度 = 相机分辨率高度
+     * @author wxson
+     * @param
+     * viewWidth : view's viewWidth
+     * viewHeight : view's viewHeight
+     * @return false: fail   true: success
+     */
+    internal fun calcPreviewSize(viewWidth: Int, viewHeight: Int): Boolean {
+        Log.i(TAG, "calcPreviewSize: " + viewWidth + "x" + viewHeight)
+        val manager = app.getSystemService(Context.CAMERA_SERVICE) as CameraManager
+        try {
+            val characteristics = manager.getCameraCharacteristics(cameraId)
+            val map = characteristics.get(CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP)
+            var bestWidth = 0
+            var bestHeight = 0
+            val aspect = viewWidth.toFloat() / viewHeight       // view的长宽比
+            val sizes = map!!.getOutputSizes(ImageReader::class.java)   // 相机支持的分辨率
+            for (i in sizes.size downTo 1) {
+                val sz = sizes[i - 1]
+                val w = sz.width
+                val h = sz.height
+                Log.i(TAG, "trying size: " + w + "x" + h)
+                if (viewWidth >= w && viewHeight >= h && bestWidth <= w && bestHeight <= h
+                    && Math.abs(aspect - w.toFloat() / h) < 0.1
+                ) {
+                    bestWidth = w
+                    bestHeight = h
+                }
+            }
+            Log.i(TAG, "best size: " + bestWidth + "x" + bestHeight)
+            assert(!(bestWidth == 0 || bestHeight == 0))
+            if (imageSize.width == bestWidth && imageSize.height == bestHeight)
+                return false
+            else {
+                imageSize = Size(bestWidth, bestHeight)
+                // 图像放大率
+                previewScale = Math.min(viewWidth.toFloat()/bestWidth, viewHeight.toFloat()/bestHeight)
+                // 图像显示范围
+                viewRect = Rect(0, 0, (previewScale * bestHeight).toInt(), (previewScale * bestWidth).toInt())
+                previewThread.canvasRect = viewRect
+                return true
+            }
+        } catch (e: CameraAccessException) {
+            Log.e(TAG, "calcPreviewSize - Camera Access Exception", e)
+        } catch (e: IllegalArgumentException) {
+            Log.e(TAG, "calcPreviewSize - Illegal Argument Exception", e)
+        } catch (e: SecurityException) {
+            Log.e(TAG, "calcPreviewSize - Security Exception", e)
+        }
+        return false
+    }
+
 
     //endregion
 
@@ -524,30 +599,6 @@ class CameraViewModel(application: Application) : AndroidViewModel(application),
     private fun bindService() {
         val intent = Intent(app, CameraIntentService::class.java)
         app.bindService(intent, serviceConnection, Context.BIND_AUTO_CREATE)
-    }
-    //endregion
-
-    //region for openCv
-    private var rgbaMat: Mat? = null
-    private var grayMat: Mat? = null
-
-    override fun onCameraViewStarted(width: Int, height: Int) {
-        Log.i(TAG, "onCameraViewStarted width= $width height= $height")
-        rgbaMat = Mat(width, height, CvType.CV_8UC4)
-        grayMat = Mat(width, height, CvType.CV_8UC1)
-    }
-
-    override fun onCameraViewStopped() {
-        rgbaMat?.release()
-        grayMat?.release()
-    }
-
-    override fun onCameraFrame(inputFrame: CameraBridgeViewBase.CvCameraViewFrame?): Mat? {
-        rgbaMat = inputFrame?.rgba()
-//        grayMat = inputFrame?.gray()
-        Core.rotate(rgbaMat, rgbaMat, Core.ROTATE_90_CLOCKWISE)
-//        Core.rotate(grayMat, grayMat, Core.ROTATE_90_CLOCKWISE)
-        return rgbaMat
     }
     //endregion
 }
