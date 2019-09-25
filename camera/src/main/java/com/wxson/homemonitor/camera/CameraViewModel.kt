@@ -125,12 +125,13 @@ class CameraViewModel(application: Application) : AndroidViewModel(application){
     private lateinit var imageReader: ImageReader
     private lateinit var captureSession: CameraCaptureSession
     private lateinit var previewRequest: CaptureRequest
-//    private var surfaceTexture: SurfaceTexture? = null
+
     var rotation = Surface.ROTATION_0   // 显示设备方向
     private val openCvFormat = ImageFormat.YUV_420_888
     private lateinit var openCvImageReader: ImageReader
     private var backgroundMat: Mat? = null
-
+    private var intervalCount: Int = 0
+    private var motionDetectOn = true
     lateinit var textureView: TextureView
     private lateinit var previewThread: PreviewThread
     private var imageSize = Size(-1, -1)
@@ -235,8 +236,7 @@ class CameraViewModel(application: Application) : AndroidViewModel(application){
                     }
                 }, null
             )
-//            // 根据相机的分辨率，获取最佳的预览尺寸 通知MainActivity根据选中的预览尺寸来调整预览组件（TextureView的）的长宽比
-//            previewSizeLiveData.postValue(chooseOptimalSize(map.getOutputSizes(SurfaceTexture::class.java), surfaceWidth, surfaceHeight, largest))
+            // 根据相机的分辨率，获取最佳的预览尺寸
             if (!calcPreviewSize(surfaceHeight, surfaceWidth)){
                 localMsgLiveData.postValue("PreviewSize = bestSize")
             }
@@ -261,23 +261,16 @@ class CameraViewModel(application: Application) : AndroidViewModel(application){
             if (cameraDevice == null){
                 return
             }
-//            val previewWidth = previewSizeLiveData.value!!.width
-//            val previewHeight = previewSizeLiveData.value!!.height
             val imageWidth = imageSize.width
             val imageHeight = imageSize.height
-//            surfaceTexture?.setDefaultBufferSize(previewWidth, previewHeight)
 
-//            // Set up Surface for the camera preview
-//            val previewSurface = Surface(surfaceTexture)
             // Set up openCvImageReader
             openCvImageReader = ImageReader.newInstance(imageWidth, imageHeight, openCvFormat, 3)
-            openCvImageReader.setOnImageAvailableListener(ImageAvailableListener(openCvFormat, imageWidth, imageHeight, backgroundMat, previewThread), null)
+            openCvImageReader.setOnImageAvailableListener(ImageAvailableListener(openCvFormat, imageWidth, imageHeight, motionDetectOn, backgroundMat, intervalCount, previewThread), null)
             val openCvSurface = openCvImageReader.surface
 
             // 创建作为预览的CaptureRequest.Builder
             previewRequestBuilder = cameraDevice!!.createCaptureRequest(CameraDevice.TEMPLATE_PREVIEW)
-//            // 将textureView的surface作为CaptureRequest.Builder的目标
-//            previewRequestBuilder.addTarget(previewSurface)
             // 将openCvImageReader的surface作为CaptureRequest.Builder的目标
             previewRequestBuilder.addTarget(openCvSurface)
 
@@ -466,10 +459,6 @@ class CameraViewModel(application: Application) : AndroidViewModel(application){
 //            surfaceTexture = surface
             previewSurfaceWidth = width
             previewSurfaceHigh = height
-
-//            // to start previewThread
-//            previewThread = PreviewThread(textureView)
-//            Thread(previewThread).start()
 
             // notify MainActivity to requestCameraPermission
             surfaceTextureStatusLiveData.postValue("onSurfaceTextureAvailable")

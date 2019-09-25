@@ -16,7 +16,9 @@ import kotlin.system.exitProcess
 class ImageAvailableListener(private val openCvFormat: Int,
                              private val width: Int,
                              private val height: Int,
+                             private var motionDetectOn: Boolean,
                              private var backgroundMat: Mat?,
+                             private var intervalCount: Int,
                              private val previewThread: PreviewThread) : ImageReader.OnImageAvailableListener {
     private val TAG = this.javaClass.simpleName
     override fun onImageAvailable(reader: ImageReader) {
@@ -35,17 +37,63 @@ class ImageAvailableListener(private val openCvFormat: Int,
             val yPlane = planes[0].buffer
             val uvPlane = planes[1].buffer
             val yMat = Mat(height, width, CvType.CV_8UC1, yPlane)
-//            val yMat = Mat(width, height, CvType.CV_8UC1, yPlane)
             val uvMat = Mat(height / 2, width / 2, CvType.CV_8UC2, uvPlane)
-//            val uvMat = Mat(width / 2, height / 2, CvType.CV_8UC2, uvPlane)
-
+            // start of motion detection
+            if (motionDetectOn){
+                intervalCount++
+                if (backgroundMat == null){
+                    // first image noise reduction
+                    Imgproc.GaussianBlur(yMat, yMat, org.opencv.core.Size(13.0, 13.0), 0.0, 0.0)
+                    backgroundMat = Mat()
+                    Imgproc.Canny(yMat, backgroundMat, 80.0, 100.0)
+                    return
+                }
+                else{
+                    // skip interval frames
+                    if (intervalCount >= 0){
+                        intervalCount = 0
+                        // next image noise reduction
+                        Imgproc.GaussianBlur(yMat, yMat, org.opencv.core.Size(13.0, 13.0), 0.0, 0.0)
+                        // get contours
+                        val contoursMat = Mat()
+                        Imgproc.Canny(yMat, contoursMat, 80.0, 100.0)
+                        // get difference between two images
+                        val diffMat = Mat()
+                        Core.absdiff(backgroundMat, contoursMat, diffMat)
+                        // Counts non-zero array elements.
+                        val diffElements = Core.countNonZero(diffMat)
+                        val matSize = diffMat.rows() * diffMat.cols()
+                        val diff = diffElements.toFloat()/matSize
+                        if (diff > 0.004){
+                            Log.e(TAG, "object moving !! diff=$diff" )
+                        }
+                        // save background image
+                        backgroundMat = contoursMat
+//                        // ***************** debug start *********************
+//                        val showMat = Mat()
+//                        Core.rotate(contoursMat, showMat, Core.ROTATE_90_CLOCKWISE)
+//                        val bitmap = Bitmap.createBitmap(height, width, Bitmap.Config.ARGB_8888)
+//                        try{
+//                            Utils.matToBitmap(showMat, bitmap)
+//                        }
+//                        catch (e: java.lang.Exception){
+//                            Log.e(TAG, "Bitmap type: " + bitmap.width + "*" + bitmap.height)
+//                            exitProcess(1)
+//                        }
+//                        val msg = Message()
+//                        msg.data.putParcelable("bitmap", bitmap)
+//                        previewThread.revHandler.sendMessage(msg)
+//                        // ***************** debug end   *********************
+                    }
+                }
+            }
+            //**************************************************************************************
             // send image to previewThread
             val tempFrame = JavaCamera2Frame(yMat, uvMat, width, height, openCvFormat)
-//            val tempFrame = JavaCamera2Frame(yMat, uvMat, height, width, openCvFormat)
-            val modified: Mat = tempFrame.rgba()
+            val modified = tempFrame.rgba()
             Core.rotate(modified, modified,  Core.ROTATE_90_CLOCKWISE)
-//            val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888);
-            val bitmap = Bitmap.createBitmap(height, width, Bitmap.Config.ARGB_8888);
+            // make bitmap for display
+            val bitmap = Bitmap.createBitmap(height, width, Bitmap.Config.ARGB_8888)
             try{
                 Utils.matToBitmap(modified, bitmap)
             }
@@ -60,32 +108,7 @@ class ImageAvailableListener(private val openCvFormat: Int,
             msg.data.putParcelable("bitmap", bitmap)
             previewThread.revHandler.sendMessage(msg)
             tempFrame.release()
-
-            // start of motion detection
-            if (backgroundMat == null){
-                // first image noise reduction
-                backgroundMat = Mat()
-                Imgproc.GaussianBlur(yMat, backgroundMat, org.opencv.core.Size(13.0, 13.0), 0.0, 0.0)
-                return
-            }
-            else{
-                // next image noise reduction
-                Imgproc.GaussianBlur(yMat, yMat, org.opencv.core.Size(13.0, 13.0), 0.0, 0.0)
-                // get difference between two images
-                val diffMat = Mat()
-                Core.absdiff(backgroundMat, yMat, diffMat)
-                // Binarization
-                Imgproc.threshold(diffMat, diffMat, 25.0, 255.0, Imgproc.THRESH_BINARY)
-                // Counts non-zero array elements.
-                val diffElements = Core.countNonZero(diffMat)
-                val matSize = diffMat.rows() * diffMat.cols()
-                val diff = diffElements.toFloat()/matSize
-                if (diff > 0.05 && diff < 0.5){
-                    Log.e(TAG, "object moving !! diff=$diff" )
-                }
-                // save background image
-                backgroundMat = yMat
-            }
+            //**************************************************************************************
             image.close()
         }
         catch (e: Exception){
@@ -155,7 +178,7 @@ class ImageAvailableListener(private val openCvFormat: Int,
         fun release() {
             rgba.release()
         }
-    };
+    }
 
 }
 
