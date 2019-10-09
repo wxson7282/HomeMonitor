@@ -15,7 +15,7 @@ import java.net.Socket
 
 private const val ACTION_TCP = "com.wxson.homemonitor.camera.connect.action.TCP"
 var IsTcpSocketServiceOn = false  //switch for TcpSocketService ON/OFF
-private lateinit var StringTransferListener: IStringTransferListener
+private lateinit var stringTransferListener: IStringTransferListener
 
 /** * An [IntentService] subclass for handling asynchronous task requests in
  * a service on a separate handler thread.
@@ -44,10 +44,10 @@ class CameraIntentService : IntentService("CameraIntentService") {
             Log.i(TAG, "handleActionTcp: create ServerSocket")
             while (IsTcpSocketServiceOn){
                 Log.i(TAG, "handleActionTcp: while IsTcpSocketServiceOn")
-                StringTransferListener.onMsgTransfer("TcpSocketServiceStatus", "ON")
+                stringTransferListener.onMsgTransfer("TcpSocketServiceStatus", "ON")
                 clientSocket = serverSocket.accept()   //blocks until a connection is made
                 Log.i(TAG, "client IP address: " + clientSocket.inetAddress.hostAddress)
-                StringTransferListener.onMsgTransfer("TcpSocketClientStatus", "ON")
+                stringTransferListener.onMsgTransfer("TcpSocketClientStatus", "ON")
                 serverThread = ServerThread(clientSocket)
                 Thread(serverThread).start()
             }
@@ -62,7 +62,7 @@ class CameraIntentService : IntentService("CameraIntentService") {
             serverSocket?.close()
             IsTcpSocketServiceOn = false
             tcpSocketServiceStatus = "OFF"
-            StringTransferListener.onMsgTransfer("TcpSocketServiceStatus", tcpSocketServiceStatus)
+            stringTransferListener.onMsgTransfer("TcpSocketServiceStatus", tcpSocketServiceStatus)
         }
     }
 
@@ -117,8 +117,8 @@ class CameraIntentService : IntentService("CameraIntentService") {
         IsTcpSocketServiceOn = false
     }
 
-    fun setStringTransferListener(stringTransferListener: IStringTransferListener) {
-        StringTransferListener = stringTransferListener
+    fun setStringTransferListener(listener: IStringTransferListener) {
+        stringTransferListener = listener
     }
 }
 class ServerThread(private var clientSocket: Socket) : Runnable{
@@ -144,7 +144,7 @@ class ServerThread(private var clientSocket: Socket) : Runnable{
                                 val arrivedString = String(inputObject as ByteArray)
                                 Log.i(TAG, "$arrivedString received")
                                 // triggers listener
-                                StringTransferListener.onStringArrived(arrivedString, clientSocket.inetAddress)
+                                stringTransferListener.onStringArrived(arrivedString, clientSocket.inetAddress)
                             }
                             else ->{
                                 Log.i(TAG, "other class received")
@@ -172,16 +172,22 @@ class ServerThread(private var clientSocket: Socket) : Runnable{
         // 如果捕捉到异常，表明该Socket对应的客户端已经关闭
         catch (e: IOException){
             Log.i(TAG, "readObjectFromClient: socket is closed")
-            StringTransferListener.onMsgTransfer("TcpSocketClientStatus", "OFF")
+            stringTransferListener.onMsgTransfer("TcpSocketClientStatus", "OFF")
         }
         return null
     }
 
     private class MyHandler(private val objectOutputStream: ObjectOutputStream) : Handler() {
         override fun handleMessage(msg: Message) {
-            if (msg.what == 0x333) {
-                writeObjectToClient(msg.obj)
-                this.removeMessages(0x333)
+            when (msg.what){
+                0x333 -> {  // image
+                    writeObjectToClient(msg.obj)
+                    this.removeMessages(0x333)
+                }
+                0x123 -> {  // ByteArray
+                    writeObjectToClient(msg.obj)
+                    this.removeMessages(0x123)
+                }
             }
         }
 
@@ -190,7 +196,7 @@ class ServerThread(private var clientSocket: Socket) : Runnable{
                 objectOutputStream.writeObject(obj)
                 objectOutputStream.reset()  // It is necessary to avoid OOM.
             } catch (e: IOException) {
-                StringTransferListener.onMsgTransfer("TcpSocketClientStatus", "OFF")
+                stringTransferListener.onMsgTransfer("TcpSocketClientStatus", "OFF")
             }
         }
     }

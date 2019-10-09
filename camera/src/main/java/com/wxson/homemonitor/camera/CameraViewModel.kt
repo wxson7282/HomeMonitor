@@ -31,6 +31,7 @@ import com.wxson.homemonitor.camera.connect.IStringTransferListener
 import com.wxson.homemonitor.camera.connect.IsTcpSocketServiceOn
 import com.wxson.homemonitor.camera.mediacodec.CodecCallback
 import com.wxson.homemonitor.camera.mediacodec.IByteBufferListener
+import com.wxson.homemonitor.camera.openCv.IMovingAlarmListener
 import com.wxson.homemonitor.camera.openCv.ImageAvailableListener
 import com.wxson.homemonitor.camera.preview.PreviewThread
 import com.wxson.homemonitor.commlib.*
@@ -62,7 +63,6 @@ class CameraViewModel(application: Application) : AndroidViewModel(application){
             Log.i(TAG, "onServiceDisconnected")
         }
     }
-
 
     //region for LiveData
     private var localMsgLiveData = MutableLiveData<String>()
@@ -130,13 +130,12 @@ class CameraViewModel(application: Application) : AndroidViewModel(application){
     private val openCvFormat = ImageFormat.YUV_420_888
     private lateinit var openCvImageReader: ImageReader
     private var backgroundMat: Mat? = null
-    private var intervalCount: Int = 0
-    private var motionDetectOn = true
     lateinit var textureView: TextureView
     private lateinit var previewThread: PreviewThread
     private var imageSize = Size(-1, -1)
     private var previewScale: Float = 1F
     lateinit var viewRect: Rect
+    private var imageAvailableListener: ImageAvailableListener? = null
 
     private val stateCallback = object : CameraDevice.StateCallback() {
         //  摄像头被打开时激发该方法
@@ -266,7 +265,9 @@ class CameraViewModel(application: Application) : AndroidViewModel(application){
 
             // Set up openCvImageReader
             openCvImageReader = ImageReader.newInstance(imageWidth, imageHeight, openCvFormat, 3)
-            openCvImageReader.setOnImageAvailableListener(ImageAvailableListener(openCvFormat, imageWidth, imageHeight, motionDetectOn, backgroundMat, intervalCount, previewThread), null)
+            imageAvailableListener = ImageAvailableListener(openCvFormat, imageWidth, imageHeight, false, backgroundMat, previewThread)
+            imageAvailableListener?.setMovingAlarmListener(movingAlarmListener)
+            openCvImageReader.setOnImageAvailableListener(imageAvailableListener, null)
             val openCvSurface = openCvImageReader.surface
 
             // 创建作为预览的CaptureRequest.Builder
@@ -527,7 +528,15 @@ class CameraViewModel(application: Application) : AndroidViewModel(application){
         return false
     }
 
-
+    private val movingAlarmListener = object : IMovingAlarmListener {
+        override fun onMovingAlarm() {
+            Log.i(TAG, "onMovingAlarm")
+            val msg = Message()
+            msg.what = 0x123
+            msg.obj = "Moving Alarm".toByteArray()
+            cameraIntentService?.serverThread?.handler?.sendMessage(msg)
+        }
+    }
     //endregion
 
     //region for service
@@ -550,6 +559,12 @@ class CameraViewModel(application: Application) : AndroidViewModel(application){
                 "Start Video Transmit" ->{
                     transmitInstructionListener.onTransmitInstructionArrived(true)
                 }
+                "Start Motion Detect" ->{
+                    imageAvailableListener?.motionDetectOn = true
+                }
+                "Stop Motion Detect" ->{
+                    imageAvailableListener?.motionDetectOn = false
+                }
             }
         }
 
@@ -571,10 +586,13 @@ class CameraViewModel(application: Application) : AndroidViewModel(application){
                         "ON" -> {
                             isClientConnectedLiveData.postValue(true)
                             connectStatusListener.onConnectStatusChanged(true)
+                            imageAvailableListener?.motionDetectOn = false
+
                         }
                         "OFF" -> {
                             isClientConnectedLiveData.postValue(false)
                             connectStatusListener.onConnectStatusChanged(false)
+                            imageAvailableListener?.motionDetectOn = false
                         }
                     }
                 }

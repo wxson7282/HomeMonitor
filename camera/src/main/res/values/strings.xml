@@ -1,15 +1,15 @@
 <resources>
     <string name="app_name">监控相机</string>
-    <string name="action_settings">Settings</string>
+    <string name="action_settings">设置</string>
     <string name="title_activity_settings">Settings</string>
     <string name="camera_rationale">本APP运行必须取得相机控制权限</string>
     <string name="to_requestCameraPermission">action_requestCameraPermission</string>
     <!-- Strings related to Settings -->
 
     <!-- Example Codec settings -->
-    <string name="pref_header_codec">视频格式</string>
+    <string name="pref_header_codec">视频传送格式</string>
 
-    <string name="pref_title_mime_select">视频传送编码格式</string>
+    <string name="pref_title_mime_select">编码格式</string>
     <string-array name="pref_mime_list_titles">
         <item>H264</item>
         <item>H265</item>

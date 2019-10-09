@@ -5,7 +5,6 @@ import android.content.Intent
 import android.content.res.Configuration
 import android.os.Bundle
 import android.util.Log
-import android.util.Size
 import android.view.Menu
 import android.view.MenuItem
 import android.widget.ImageView
@@ -119,14 +118,14 @@ class CameraActivity : AppCompatActivity(), EasyPermissions.PermissionCallbacks 
         Snackbar.make(textureView, msg, Snackbar.LENGTH_LONG).show()
     }
 
-    private fun setPreviewSize(previewSize: Size){
-        // 根据相机的分辨率来调整预览组件（TextureView的）的长宽比
-        if (this.resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE) {
-            textureView.setAspectRatio(previewSize.width, previewSize.height)
-        } else {
-            textureView.setAspectRatio(previewSize.height, previewSize.width)
-        }
-    }
+//    private fun setPreviewSize(previewSize: Size){
+//        // 根据相机的分辨率来调整预览组件（TextureView的）的长宽比
+//        if (this.resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE) {
+//            textureView.setAspectRatio(previewSize.width, previewSize.height)
+//        } else {
+//            textureView.setAspectRatio(previewSize.height, previewSize.width)
+//        }
+//    }
 
     private fun requestCameraPermission() {
         Log.i(TAG, "requestCameraPermission")
