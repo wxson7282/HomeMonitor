@@ -2,8 +2,10 @@ package com.wxson.homemonitor.monitor.mediacodec;
 
 import android.media.MediaCodec;
 import android.media.MediaFormat;
-import androidx.annotation.NonNull;
 import android.util.Log;
+
+import androidx.annotation.NonNull;
+
 import com.wxson.homemonitor.monitor.connect.ClientThread;
 
 import java.nio.ByteBuffer;
@@ -55,7 +57,7 @@ class DecoderCallback {
                         timeStamp = mBufferInfo.presentationTimeUs;
                         inputBuffer.put(mInputData, 0, length);
                         mInputDataReady = false;
-                        Log.i(TAG, "输入数据注入解码器 length=" + length + " timeStamp=" + timeStamp );
+//                        Log.i(TAG, "输入数据注入解码器 length=" + length + " timeStamp=" + timeStamp );
                     }
 //                    //把inputBuffer放回队列
 //                    mediaCodec.queueInputBuffer(inputBufferId,0, length, timeStamp,0);

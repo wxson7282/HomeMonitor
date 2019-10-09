@@ -11,4 +11,6 @@
     <!-- Messages Preferences -->
     <string name="server_ip_title">服务器IP地址</string>
 
+    <string name="read_external_rationale">本APP运行必须取得读取存储权限</string>
+
 </resources>

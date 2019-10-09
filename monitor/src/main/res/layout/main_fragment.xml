@@ -42,4 +42,15 @@
         app:layout_constraintEnd_toEndOf="parent"
         app:srcCompat="@drawable/ic_download" />
 
+    <com.google.android.material.floatingactionbutton.FloatingActionButton
+        android:id="@+id/fab_motion_detect"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="bottom"
+        android:layout_margin="16dp"
+        android:layout_marginBottom="16dp"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toStartOf="@+id/fab_transmit"
+        app:layout_constraintStart_toEndOf="@+id/fab_capture"
+        app:srcCompat="@drawable/ic_motion_detect" />
 </androidx.constraintlayout.widget.ConstraintLayout>

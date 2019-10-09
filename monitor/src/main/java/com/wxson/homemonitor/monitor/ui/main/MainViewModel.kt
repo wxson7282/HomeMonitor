@@ -1,6 +1,9 @@
 package com.wxson.homemonitor.monitor.ui.main
 
 import android.app.Application
+import android.media.Ringtone
+import android.media.RingtoneManager
+import android.net.Uri
 import android.os.Handler
 import android.os.Message
 import android.util.Log
@@ -19,8 +22,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application){
     private val app = getApplication<Application>()
     private val myUncheckedExceptionHandler = MyUncheckedExceptionHandler()
 
-    private var serverMsg = MutableLiveData<Any>()
-    fun getServerMsg(): LiveData<Any> {
+    private var serverMsg = MutableLiveData<String>()
+    fun getServerMsg(): LiveData<String> {
         return serverMsg
     }
 
@@ -43,7 +46,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application){
             Log.i(TAG, "handleMessage")
             // 如果消息来自于子线程
             when (msg.what){
-                0x123 -> mainViewModel.get()?.serverMsg!!.postValue(msg.obj)        // 将读取的server内容写入serverMsg中
+                0x123 -> mainViewModel.get()?.serverMsg!!.postValue(msg.obj.toString())        // 将读取的server内容写入serverMsg中
                 0x124 -> mainViewModel.get()?.localMsg!!.postValue(msg.obj.toString())
             }
         }
@@ -97,5 +100,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application){
             Log.i(TAG, "Heart Beat stop")
             heartBeatThread.isHeartBeatOn = false
         }
+    }
+
+    fun defaultMediaPlayer(){
+        val ringtoneUri: Uri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_RINGTONE)
+        val ringtone: Ringtone = RingtoneManager.getRingtone(app, ringtoneUri)
+        if (ringtone.isPlaying)
+            ringtone.stop()
+        else
+            ringtone.play()
     }
 }

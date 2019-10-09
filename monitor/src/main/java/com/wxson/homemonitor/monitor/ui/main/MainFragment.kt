@@ -25,6 +25,7 @@ class MainFragment : androidx.fragment.app.Fragment() {
     private lateinit var imageConnectStatus: ImageView
     private var isConnected = false
     private var isTransmitOn = true
+    private var isMotionDetectOn = false
 
     override fun onCreateView(
         inflater: LayoutInflater, container: ViewGroup?,
@@ -41,6 +42,7 @@ class MainFragment : androidx.fragment.app.Fragment() {
 
         fab_capture.hide()
         fab_transmit.hide()
+        fab_motion_detect.hide()
         //定义拍照浮动按钮
         fab_capture.setOnClickListener{
                 view ->
@@ -71,8 +73,24 @@ class MainFragment : androidx.fragment.app.Fragment() {
                 viewModel.setHeartBeat(false)
             }
         }
+        //定义移动探测浮动按钮
+        fab_motion_detect.setOnClickListener{
+            view ->
+            if (isMotionDetectOn){
+                viewModel.sendMsgToServer("Stop Motion Detect")    // notify server to Stop Motion Detect
+                Snackbar.make(view, "停止移动探测", Snackbar.LENGTH_SHORT).show()
+                fab_motion_detect.backgroundTintList = ContextCompat.getColorStateList(this.activity!!.baseContext, R.color.button_light)
+                isMotionDetectOn = false
+            }
+            else{
+                viewModel.sendMsgToServer("Start Motion Detect")    // notify server to Start Motion Detect
+                Snackbar.make(view, "开始移动探测", Snackbar.LENGTH_SHORT).show()
+                fab_motion_detect.backgroundTintList = ContextCompat.getColorStateList(this.activity!!.baseContext, R.color.colorAccent)
+                isMotionDetectOn = true
+            }
+        }
 
-        val serverMsgObserver: Observer<Any> = Observer { serverMsg -> showMsg(serverMsg!!.javaClass.simpleName) }
+        val serverMsgObserver: Observer<String> = Observer { serverMsg -> remoteMsgHandler(serverMsg.toString()) }
         viewModel.getServerMsg().observe(this, serverMsgObserver)
 
         val localMsgObserver: Observer<String> = Observer { localMsg -> localMsgHandler(localMsg.toString()) }
@@ -91,14 +109,27 @@ class MainFragment : androidx.fragment.app.Fragment() {
                 isConnected = true
                 fab_capture.show()
                 fab_transmit.show()
+                fab_motion_detect.backgroundTintList = ContextCompat.getColorStateList(this.activity!!.baseContext, R.color.button_light)
+                isMotionDetectOn = false
+                fab_motion_detect.show()
             }
             "Disconnected" -> {
                 imageConnectStatus.setImageDrawable(resources.getDrawable(R.drawable.ic_disconnected, null))
                 isConnected = false
                 fab_capture.hide()
                 fab_transmit.hide()
+                fab_motion_detect.hide()
             }
             else -> showMsg(localMsg)
+        }
+    }
+
+    private fun remoteMsgHandler(remoteMsg: String){
+        when (remoteMsg){
+            "Moving Alarm" -> {
+                showMsg(remoteMsg)
+                viewModel.defaultMediaPlayer()
+            }
         }
     }
 }

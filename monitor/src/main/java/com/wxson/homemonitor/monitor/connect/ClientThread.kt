@@ -89,10 +89,11 @@ class ClientThread(private val handler: Handler, private val context: Context) :
                             // Byte array is received
                             "byte[]" -> {
                                 // 每当读到来自服务器的文字数据之后，发送消息通知  程序界面显示该数据
-                                Log.e(TAG, "接收到byte[]类 内容：$inputObject")
+                                val arrivedString = String(inputObject as ByteArray)
+                                Log.e(TAG, "接收到byte[]类 内容：${arrivedString}")
                                 val msg = Message()
                                 msg.what = 0x123
-                                msg.obj = inputObject
+                                msg.obj = arrivedString
                                 handler.sendMessage(msg)
                             }
                             // other is received
