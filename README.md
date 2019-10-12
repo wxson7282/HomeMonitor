@@ -1,3 +1,452 @@
+# android手机远程视频移动检测的实践
+家中老人年高，为防止意外跌倒，需要时刻看护，于是想到用视频监控代替部分注意力。远程视频移动监测的方案有很多种，因为以前在手机上做了类似工作，参见[用安卓手机实现视频监控](https://blog.csdn.net/wxson/article/details/91987709)，在此基础之上增加移动监测报警功能。
+### 服务端修改
+移动监测功能在服务端（camera）实现，在以前架构基础上，做出如下修改。
+
+ - 原以为createCameraPreviewSession()（创建显示预览界面）时，用createCaptureSession()（创建画面捕获会话）可以使用任意数量surface作为照相机图像数据的输出口，以前架构中用到了3个surface：视频预览、视频编码器、照片文件各用一个。这次增加第四个，用于视频移动监测，但反复调试仍无法创建画面捕获会话，SDK文档中也没有找到有关surface数量限制的记述。只好将第一个surface交给ImageReader，用ImageReader同时实现视频预览和移动监测功能。
+```kotlin
+// 创建ImageReader
+openCvImageReader = ImageReader.newInstance(imageWidth, imageHeight, openCvFormat, 3)
+// 创建imageAvailableListener
+imageAvailableListener = ImageAvailableListener(openCvFormat, imageWidth, imageHeight, false, backgroundMat, previewThread)
+// 在imageAvailableListener中注入movingAlarmListener（移动报警监听器）
+imageAvailableListener?.setMovingAlarmListener(movingAlarmListener)
+// 打开ImageReader
+openCvImageReader.setOnImageAvailableListener(imageAvailableListener, null)
+// 定义ImageReader.surface
+val openCvSurface = openCvImageReader.surface
+// 创建作为预览的CaptureRequest.Builder
+previewRequestBuilder = cameraDevice!!.createCaptureRequest(CameraDevice.TEMPLATE_PREVIEW)
+// 将openCvImageReader的surface作为CaptureRequest.Builder的目标
+previewRequestBuilder.addTarget(openCvSurface)
+```
+- 创建画面捕获会话
+```kotlin
+// 创建CameraCaptureSession，该对象负责管理处理预览请求和拍照请求，以及传输请求。最多只能容纳3个surface!
+cameraDevice!!.createCaptureSession(listOf(openCvSurface, encoderInputSurface, imageReader.surface), object :
+                    CameraCaptureSession.StateCallback() {
+                    ...}
+```
+ - 根据相机的分辨率，获取最佳的预览尺寸，具体算法请参考代码中的注释
+
+```kotlin
+    /**
+     * 根据view的物理尺寸，参照相机支持的分辨率，使用最接近的长宽比，确定预览画面的尺寸
+     * 循环测试相机支持的分辨率
+     * 同时计算预览时图像放大比例
+     * 测试条件：最佳宽度 = 0
+     *           最佳高度 = 0
+     *           如果view的宽度>= 相机分辨率宽度 且 view的高度 >= 相机分辨率高度  且
+     *               最佳宽度  <= 相机分辨率宽度 且 最佳高度   <= 相机分辨率高度  且
+     *               view的长宽比与相机分辨率长宽比之差 < 0.1
+     *           则  最佳宽度 = 相机分辨率宽度
+     *               最佳高度 = 相机分辨率高度
+     * @author wxson
+     * @param
+     * viewWidth : view's viewWidth
+     * viewHeight : view's viewHeight
+     * @return false: fail   true: success
+     */
+    internal fun calcPreviewSize(viewWidth: Int, viewHeight: Int): Boolean {
+        Log.i(TAG, "calcPreviewSize: " + viewWidth + "x" + viewHeight)
+        val manager = app.getSystemService(Context.CAMERA_SERVICE) as CameraManager
+        try {
+            val characteristics = manager.getCameraCharacteristics(cameraId)
+            val map = characteristics.get(CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP)
+            var bestWidth = 0
+            var bestHeight = 0
+            val aspect = viewWidth.toFloat() / viewHeight       // view的长宽比
+            val sizes = map!!.getOutputSizes(ImageReader::class.java)   // 相机支持的分辨率
+            for (i in sizes.size downTo 1) {
+                val sz = sizes[i - 1]
+                val w = sz.width
+                val h = sz.height
+                Log.i(TAG, "trying size: " + w + "x" + h)
+                if (viewWidth >= w && viewHeight >= h && bestWidth <= w && bestHeight <= h
+                    && Math.abs(aspect - w.toFloat() / h) < 0.1
+                ) {
+                    bestWidth = w
+                    bestHeight = h
+                }
+            }
+            Log.i(TAG, "best size: " + bestWidth + "x" + bestHeight)
+            assert(!(bestWidth == 0 || bestHeight == 0))
+            if (imageSize.width == bestWidth && imageSize.height == bestHeight)
+                return false
+            else {
+                imageSize = Size(bestWidth, bestHeight)
+                // 图像放大率
+                previewScale = Math.min(viewWidth.toFloat()/bestWidth, viewHeight.toFloat()/bestHeight)
+                // 图像显示范围
+                viewRect = Rect(0, 0, (previewScale * bestHeight).toInt(), (previewScale * bestWidth).toInt())
+                previewThread.canvasRect = viewRect
+                return true
+            }
+        } catch (e: CameraAccessException) {
+            Log.e(TAG, "calcPreviewSize - Camera Access Exception", e)
+        } catch (e: IllegalArgumentException) {
+            Log.e(TAG, "calcPreviewSize - Illegal Argument Exception", e)
+        } catch (e: SecurityException) {
+            Log.e(TAG, "calcPreviewSize - Security Exception", e)
+        }
+        return false
+    }
+```
+
+ - 在stringTransferListener中增加接受客户端开关移动监测指令的功能，直接控制imageAvailableListener的外部开关变量motionDetectOn。
+
+```kotlin
+    private val stringTransferListener = object : IStringTransferListener {
+        override fun onStringArrived(arrivedString: String, clientInetAddress: InetAddress) {
+            Log.i(TAG, "onStringArrived")
+            localMsgLiveData.postValue("arrivedString:$arrivedString clientInetAddress:$clientInetAddress")
+            when (arrivedString){
+            	...
+                "Start Motion Detect" ->{
+                    imageAvailableListener?.motionDetectOn = true
+                }
+                "Stop Motion Detect" ->{
+                    imageAvailableListener?.motionDetectOn = false
+                }
+            }
+        }
+```
+
+ - 需要定义一个预览用的线程PreviewThread
+
+```kotlin
+/**
+ *  The thread used to display a content stream on
+ *  @param textureView
+ */
+class PreviewThread(private val textureView: TextureView) : Runnable {
+    lateinit var canvasRect: Rect
+    // 定义接收preview image的Handler对象
+    lateinit var revHandler: Handler
+    class MyHandler(private val textureView: TextureView, private val dstRect: Rect) : Handler(){
+        override fun handleMessage(msg: Message?) {
+            val canvas = textureView.lockCanvas() ?: return
+            if (msg != null){
+                val bitmap: Bitmap? = msg.data.getParcelable("bitmap")
+                if (bitmap != null) {
+                    canvas.drawBitmap(bitmap, null, dstRect, null)
+                }
+            }
+            textureView.unlockCanvasAndPost(canvas)
+        }
+    }
+
+    override fun run() {
+        Looper.prepare()
+        revHandler = MyHandler(textureView, canvasRect)
+        Looper.loop()
+    }
+}
+```
+
+ * 在相机打开时启动PreviewThread
+
+```kotlin
+    fun openCamera() {
+        Log.i(TAG, "openCamera")
+        previewThread = PreviewThread(textureView)
+        setUpCameraOutputs(previewSurfaceWidth, previewSurfaceHigh)
+
+        val manager = app.getSystemService(Context.CAMERA_SERVICE) as CameraManager
+        try {
+            // 打开摄像头
+            manager.openCamera(cameraId, stateCallback, null)
+        } catch (e: CameraAccessException) {
+            e.printStackTrace()
+        } catch (e: SecurityException) {
+            e.printStackTrace()
+        } catch (e: NullPointerException) {
+            e.printStackTrace()
+        }
+            // to start previewThread
+            Thread(previewThread).start()
+    }
+```
+
+ - 在ImageReader中实现OnImageAvailableListener，这是实现移动监测的关键部分，主要动作有
+ 	- 读取图像数据
+ 	- 格式检查
+ 	- 图像数据转为mat
+ 	- 用图像亮度mat作为移动监测用的帧数据
+ 	- 首帧处理
+ 		- 用高斯滤波抑制噪声
+ 		- 提取轮廓
+ 		- 存为背景帧
+ 	-  后续帧处理
+ 		- 用高斯滤波抑制噪声
+ 		- 提取轮廓
+ 		- 计算当前帧与背景帧的差值
+ 		- 如果差值大于指定的阈值，通过movingAlarmListener向外部发出移动报警文字。 
+ 		- 存为背景帧
+ 	- 用图像亮度mat和色度mat合成彩色mat
+ 	- 彩色mat顺时针旋转90°
+ 	- 彩色mat转换为 bitmap
+ 	- 把bitmap发送给预览线程previewThread，预览线程用canvas.drawBitmap方法显示图像。
+
+```kotlin
+class ImageAvailableListener(private val openCvFormat: Int,
+                             private val width: Int,
+                             private val height: Int,
+                             var motionDetectOn: Boolean,
+                             private var backgroundMat: Mat?,
+                             private val previewThread: PreviewThread) : ImageReader.OnImageAvailableListener {
+    private val TAG = this.javaClass.simpleName
+    private var isTimeOut = true
+    private val timer = Timer(true)     // The timer for restraining contiguous alarms
+    private lateinit var movingAlarmListener: IMovingAlarmListener
+
+    override fun onImageAvailable(reader: ImageReader) {
+        try{
+            val image = reader.acquireLatestImage() ?: return
+            // sanity checks - 3 planes
+            val planes = image.planes
+            assert(planes.size == 3)
+            assert(image.format == openCvFormat)
+            // https://developer.android.com/reference/android/graphics/ImageFormat.html#YUV_420_888
+            // Y plane (0) non-interleaved => stride == 1; U/V plane interleaved => stride == 2
+            assert(planes[0].pixelStride == 1)
+            assert(planes[1].pixelStride == 2)
+            assert(planes[2].pixelStride == 2)
+
+            val yPlane = planes[0].buffer
+            val uvPlane = planes[1].buffer
+            val yMat = Mat(height, width, CvType.CV_8UC1, yPlane)
+            val uvMat = Mat(height / 2, width / 2, CvType.CV_8UC2, uvPlane)
+            val cacheMat = yMat.clone()
+            // start of motion detection
+            if (motionDetectOn){
+                if (backgroundMat == null){
+                    // first image noise reduction
+                    Imgproc.GaussianBlur(cacheMat, cacheMat, org.opencv.core.Size(13.0, 13.0), 0.0, 0.0)
+                    backgroundMat = Mat()
+                    Imgproc.Canny(cacheMat, backgroundMat, 80.0, 100.0)
+                    return
+                }
+                else{
+                    // skip interval frames
+                    // next image noise reduction
+                    Imgproc.GaussianBlur(cacheMat, cacheMat, org.opencv.core.Size(13.0, 13.0), 0.0, 0.0)
+                    // get contours
+                    val contoursMat = Mat()
+                    Imgproc.Canny(cacheMat, contoursMat, 80.0, 100.0)
+                    // get difference between two images
+                    val diffMat = Mat()
+                    Core.absdiff(backgroundMat, contoursMat, diffMat)
+                    // Counts non-zero array elements.
+                    val diffElements = Core.countNonZero(diffMat)
+                    val matSize = diffMat.rows() * diffMat.cols()
+                    val diff = diffElements.toFloat() / matSize
+                    if (diff > 0.004) {
+//                        Log.e(TAG, "object moving !! diff=$diff")
+                        if (isTimeOut){
+                            Log.i(TAG, "send MovingAlarm message out ")
+                            movingAlarmListener.onMovingAlarm()
+                            isTimeOut = false
+                            timer.schedule(object : TimerTask(){
+                                override fun run() {
+                                    isTimeOut = true
+                                }
+                            }, 1000)
+                        }
+                    }
+                    // save background image
+                    backgroundMat = contoursMat.clone()
+//                    // ***************** debug start *********************
+//                    sendImageMsg(contoursMat)
+//                    // ***************** debug end   *********************
+                }
+            }
+            //**************************************************************************************
+            // send image to previewThread
+            val tempFrame = JavaCamera2Frame(yMat, uvMat, width, height, openCvFormat)
+            val modified = tempFrame.rgba()
+            sendImageMsg(modified)
+            tempFrame.release()
+            //**************************************************************************************
+            image.close()
+        }
+        catch (e: Exception){
+            Log.e(TAG, "onImageAvailable ", e)
+        }
+    }
+
+    /**
+     * This class interface is abstract representation of single frame from camera for onCameraFrame callback
+     * Attention: Do not use objects, that represents this interface out of onCameraFrame callback!
+     */
+    interface CvCameraViewFrame {
+        /**
+         * This method returns RGBA Mat with frame
+         */
+        fun rgba(): Mat
+        /**
+         * This method returns single channel gray scale Mat with frame
+         */
+        fun gray(): Mat
+    }
+
+    private inner class JavaCamera2Frame() : CvCameraViewFrame {
+        private var openCvFormat: Int = 0
+        private var width: Int = 0
+        private var height: Int = 0
+        private var yuvFrameData: Mat? = null
+        private var uvFrameData: Mat? = null
+        private var rgba = Mat()
+
+        constructor(Yuv420sp: Mat, w: Int, h: Int, format: Int): this() {
+            yuvFrameData = Yuv420sp
+            uvFrameData = null
+            width = w
+            height = h
+            openCvFormat = format
+        }
+
+        constructor(Y: Mat, UV: Mat, w: Int, h: Int, format: Int) : this() {
+            yuvFrameData = Y
+            uvFrameData = UV
+            width = w
+            height = h
+            openCvFormat = format
+        }
+
+
+        override fun gray(): Mat {
+            return yuvFrameData!!.submat(0, height, 0, width)
+        }
+
+        override fun rgba(): Mat {
+            if (openCvFormat == ImageFormat.NV21)
+                Imgproc.cvtColor(yuvFrameData!!, rgba, Imgproc.COLOR_YUV2RGBA_NV21, 4)
+            else if (openCvFormat == ImageFormat.YV12)
+                Imgproc.cvtColor( yuvFrameData!!, rgba, Imgproc.COLOR_YUV2RGB_I420,4) // COLOR_YUV2RGBA_YV12 produces inverted colors
+            else if (openCvFormat == ImageFormat.YUV_420_888) {
+                assert(uvFrameData != null)
+                //                Imgproc.cvtColorTwoPlane(yuvFrameData, uvFrameData, rgba, Imgproc.COLOR_YUV2RGBA_NV21);    //modified by wan
+                Imgproc.cvtColorTwoPlane(yuvFrameData!!, uvFrameData!!, rgba, Imgproc.COLOR_YUV2BGRA_NV21)  //modified by wan
+            } else
+                throw IllegalArgumentException("Preview Format can be NV21 or YV12")
+
+            return rgba
+        }
+
+        fun release() {
+            rgba.release()
+        }
+    }
+
+    private fun sendImageMsg(inputMat: Mat){
+        val showMat = inputMat.clone()
+        Core.rotate(showMat, showMat, Core.ROTATE_90_CLOCKWISE)
+        // make bitmap for display
+        val bitmap = Bitmap.createBitmap(height, width, Bitmap.Config.ARGB_8888)
+        try{
+            Utils.matToBitmap(showMat, bitmap)
+        }
+        catch (e: java.lang.Exception){
+            Log.e(TAG, "Mat type: $showMat")
+            Log.e(TAG, "modified.dims:" + showMat.dims() + " rows:" + showMat.rows() + " cols:" + showMat.cols())
+            Log.e(TAG, "Bitmap type: " + bitmap.width + "*" + bitmap.height)
+            Log.e(TAG, "Utils.matToBitmap() throws an exception: " + e.message)
+            exitProcess(1)
+        }
+        val msg = Message()
+        msg.data.putParcelable("bitmap", bitmap)
+        previewThread.revHandler.sendMessage(msg)
+    }
+
+    private fun sendMovingMsg(){
+    }
+
+    fun setMovingAlarmListener(listener : IMovingAlarmListener){
+        movingAlarmListener = listener
+    }
+
+}
+```
+
+### 客户端修改
+客户端（monitor）修改比较简单。
+
+ - 在界面上增加一个移动监测按钮
+```xml
+    <com.google.android.material.floatingactionbutton.FloatingActionButton
+        android:id="@+id/fab_motion_detect"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="bottom"
+        android:layout_margin="16dp"
+        android:layout_marginBottom="16dp"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toStartOf="@+id/fab_transmit"
+        app:layout_constraintStart_toEndOf="@+id/fab_capture"
+        app:srcCompat="@drawable/ic_motion_detect" />
+```
+ - 在程序中监听这个按钮，通过已经建立的socket连接，发送字符串指令到服务端。
+
+```kotlin
+private var isMotionDetectOn = false
+
+        //定义移动探测浮动按钮
+        fab_motion_detect.setOnClickListener{
+            view ->
+            if (isMotionDetectOn){
+                viewModel.sendMsgToServer("Stop Motion Detect")    // notify server to Stop Motion Detect
+                Snackbar.make(view, "停止移动探测", Snackbar.LENGTH_SHORT).show()
+                fab_motion_detect.backgroundTintList = ContextCompat.getColorStateList(this.activity!!.baseContext, R.color.button_light)
+                isMotionDetectOn = false
+            }
+            else{
+                viewModel.sendMsgToServer("Start Motion Detect")    // notify server to Start Motion Detect
+                Snackbar.make(view, "开始移动探测", Snackbar.LENGTH_SHORT).show()
+                fab_motion_detect.backgroundTintList = ContextCompat.getColorStateList(this.activity!!.baseContext, R.color.colorAccent)
+                isMotionDetectOn = true
+            }
+        }
+```
+
+ - 在客户端增加对服务端信息的响应，如果服务端发出的是移动警告信息，则启动系统铃声作为警告铃声。
+
+```kotlin
+    override fun onActivityCreated(savedInstanceState: Bundle?) {
+        super.onActivityCreated(savedInstanceState)
+        Log.i(TAG, "onActivityCreated")
+        ...
+        val serverMsgObserver: Observer<String> = Observer { serverMsg -> remoteMsgHandler(serverMsg.toString()) }
+        viewModel.getServerMsg().observe(this, serverMsgObserver)
+        ...      
+    }
+
+    private fun remoteMsgHandler(remoteMsg: String){
+        when (remoteMsg){
+            "Moving Alarm" -> {
+                showMsg(remoteMsg)
+                viewModel.defaultMediaPlayer()
+            }
+        }
+    }
+
+    fun defaultMediaPlayer(){
+        val ringtoneUri: Uri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_RINGTONE)
+        val ringtone: Ringtone = RingtoneManager.getRingtone(app, ringtoneUri)
+        if (ringtone.isPlaying)
+            ringtone.stop()
+        else
+            ringtone.play()
+    }
+```
+其它细节，请参考源代码。
+实践中，发现由于不同手机镜头有差异，移动监测的灵敏度会有不同，需要调整移动监测处理的相关参数。
+如果有问题，请联系我（wxson@126.com）。
+
+
+
+
+
 # **用安卓手机实现视频监控**
 现代手机更新换代如此之快，以至于家中往往有闲置不用的手机。本APP用一部闲置手机作为监控相机，在另一部手机上实现远程监控。
 

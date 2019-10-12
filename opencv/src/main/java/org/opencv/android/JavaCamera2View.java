@@ -1,17 +1,9 @@
 package org.opencv.android;
 
-import java.nio.ByteBuffer;
-import java.util.Arrays;
-
 import android.annotation.TargetApi;
 import android.content.Context;
 import android.graphics.ImageFormat;
-import android.hardware.camera2.CameraAccessException;
-import android.hardware.camera2.CameraCaptureSession;
-import android.hardware.camera2.CameraCharacteristics;
-import android.hardware.camera2.CameraDevice;
-import android.hardware.camera2.CameraManager;
-import android.hardware.camera2.CaptureRequest;
+import android.hardware.camera2.*;
 import android.hardware.camera2.params.StreamConfigurationMap;
 import android.media.Image;
 import android.media.ImageReader;
@@ -21,10 +13,12 @@ import android.util.AttributeSet;
 import android.util.Log;
 import android.view.Surface;
 import android.view.ViewGroup.LayoutParams;
-
 import org.opencv.core.CvType;
 import org.opencv.core.Mat;
 import org.opencv.imgproc.Imgproc;
+
+import java.nio.ByteBuffer;
+import java.util.Arrays;
 
 /**
  * This class is an implementation of the Bridge View between OpenCV and Java Camera.
@@ -311,7 +305,8 @@ public class JavaCamera2View extends CameraBridgeViewBase {
             mFrameHeight = mPreviewSize.getHeight();
 
             if ((getLayoutParams().width == LayoutParams.MATCH_PARENT) && (getLayoutParams().height == LayoutParams.MATCH_PARENT))
-                mScale = Math.min(((float)height)/mFrameHeight, ((float)width)/mFrameWidth);
+//                mScale = Math.min(((float)height)/mFrameHeight, ((float)width)/mFrameWidth);  //modified by wan
+                mScale = Math.min(((float)width)/mFrameHeight, ((float)height)/mFrameWidth);    //modified by wan
             else
                 mScale = 0;
 
@@ -345,7 +340,8 @@ public class JavaCamera2View extends CameraBridgeViewBase {
                 Imgproc.cvtColor(mYuvFrameData, mRgba, Imgproc.COLOR_YUV2RGB_I420, 4); // COLOR_YUV2RGBA_YV12 produces inverted colors
             else if (mPreviewFormat == ImageFormat.YUV_420_888) {
                 assert (mUVFrameData != null);
-                Imgproc.cvtColorTwoPlane(mYuvFrameData, mUVFrameData, mRgba, Imgproc.COLOR_YUV2RGBA_NV21);
+//                Imgproc.cvtColorTwoPlane(mYuvFrameData, mUVFrameData, mRgba, Imgproc.COLOR_YUV2RGBA_NV21);    //modified by wan
+                Imgproc.cvtColorTwoPlane(mYuvFrameData, mUVFrameData, mRgba, Imgproc.COLOR_YUV2BGRA_NV21);  //modified by wan
             } else
                 throw new IllegalArgumentException("Preview Format can be NV21 or YV12");
 

@@ -1,4 +1,0 @@
-<resources>
-    <string name="app_name">OCV图像处理</string>
-    <string name="camera_rationale">本APP运行必须取得相机控制权限</string>
-</resources>
