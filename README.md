@@ -25,7 +25,8 @@ previewRequestBuilder.addTarget(openCvSurface)
 // 创建CameraCaptureSession，该对象负责管理处理预览请求和拍照请求，以及传输请求。最多只能容纳3个surface!
 cameraDevice!!.createCaptureSession(listOf(openCvSurface, encoderInputSurface, imageReader.surface), object :
                     CameraCaptureSession.StateCallback() {
-                    ...}
+                    /* */
+                    })
 ```
  - 根据相机的分辨率，获取最佳的预览尺寸，具体算法请参考代码中的注释
 
@@ -100,16 +101,17 @@ cameraDevice!!.createCaptureSession(listOf(openCvSurface, encoderInputSurface, i
         override fun onStringArrived(arrivedString: String, clientInetAddress: InetAddress) {
             Log.i(TAG, "onStringArrived")
             localMsgLiveData.postValue("arrivedString:$arrivedString clientInetAddress:$clientInetAddress")
-            when (arrivedString){
-            	...
-                "Start Motion Detect" ->{
+            when (arrivedString) {
+                //...
+                "Start Motion Detect" -> {
                     imageAvailableListener?.motionDetectOn = true
                 }
-                "Stop Motion Detect" ->{
+                "Stop Motion Detect" -> {
                     imageAvailableListener?.motionDetectOn = false
                 }
             }
         }
+    }
 ```
 
  - 需要定义一个预览用的线程PreviewThread
@@ -415,10 +417,10 @@ private var isMotionDetectOn = false
     override fun onActivityCreated(savedInstanceState: Bundle?) {
         super.onActivityCreated(savedInstanceState)
         Log.i(TAG, "onActivityCreated")
-        ...
+        //...
         val serverMsgObserver: Observer<String> = Observer { serverMsg -> remoteMsgHandler(serverMsg.toString()) }
         viewModel.getServerMsg().observe(this, serverMsgObserver)
-        ...      
+        //...      
     }
 
     private fun remoteMsgHandler(remoteMsg: String){
